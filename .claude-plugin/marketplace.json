@@ -9,7 +9,7 @@
   "plugins": [
     {
       "name": "kilaskills",
-      "source": "./",
+      "source": "./plugin",
       "description": "Skills Claude Code pour piloter l'application Kilio (tâches, notes, ...) directement depuis une session de chat."
     },
     {
