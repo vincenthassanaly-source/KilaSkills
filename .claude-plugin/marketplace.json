@@ -11,6 +11,18 @@
       "name": "kilaskills",
       "source": "./",
       "description": "Skills Claude Code pour piloter l'application Kilio (tâches, notes, ...) directement depuis une session de chat."
+    },
+    {
+      "name": "ecc",
+      "source": "./plugins/ecc",
+      "description": "Everything Claude Code (ECC) d'Affaan Mustafa, vendorisé indépendamment de kilaskills - 68 agents, 292 skills, hooks et commandes pour Claude Code.",
+      "version": "2.2.2",
+      "author": {
+        "name": "Affaan Mustafa"
+      },
+      "homepage": "https://ecc.tools",
+      "repository": "https://github.com/affaan-m/ECC",
+      "license": "MIT"
     }
   ]
 }
