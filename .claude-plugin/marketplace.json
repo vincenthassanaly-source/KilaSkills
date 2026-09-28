@@ -1,0 +1,14 @@
+{
+  "$schema": "https://json.schemastore.org/claude-code-marketplace.json",
+  "name": "kilaskills-marketplace",
+  "owner": {
+    "name": "Vincent Hassanaly"
+  },
+  "plugins": [
+    {
+      "name": "kilaskills",
+      "source": ".",
+      "description": "Skills Claude Code pour piloter l'application Kilio (tâches, notes, ...) directement depuis une session de chat."
+    }
+  ]
+}
