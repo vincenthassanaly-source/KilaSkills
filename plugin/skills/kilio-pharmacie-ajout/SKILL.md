@@ -1,6 +1,6 @@
 ---
 name: kilio-pharmacie-ajout
-description: "Ranger dans le module Pharmacie de Kilio une info apprise (cours, molécule, conseil, interaction…) dictée en vrac dans le chat : Claude la reformule en notions atomiques, la classe dans matière → chapitre, crée les cartes de révision et écrit en base via Supabase. Utiliser quand l'utilisateur dit « j'ai appris que… », « retiens ça en pharmacie », « ajoute ça à mes cours de pharma », ou dicte une connaissance de pharmacie à mémoriser."
+description: "Ranger dans le module Pharmacie de Kilio une info apprise (cours, molécule, conseil, interaction…) dictée en vrac dans le chat : Claude la reformule en notions atomiques, la classe dans matière → chapitre, colore systématiquement le contenu (logique de couleurs choisie par Claude : niveaux, catégories ou étapes), crée les cartes de révision et écrit en base via Supabase. Utiliser quand l'utilisateur dit « j'ai appris que… », « retiens ça en pharmacie », « ajoute ça à mes cours de pharma », ou dicte une connaissance de pharmacie à mémoriser."
 metadata:
   origin: kilio
 ---
@@ -91,17 +91,22 @@ set contenu = '<contenu fusionné>', tags = array['<tags fusionnés>'], updated_
 where id = '<notion_id>';
 ```
 
-## Couleurs des seuils
+## Couleurs
 
-Quand une notion contient des seuils, des niveaux ou des plages de valeurs (glycémie, tension,
-HbA1c, INR…), l'écrire sur plusieurs lignes et colorer chaque niveau avec une balise en DÉBUT
-de ligne : `[couleur] texte`. Couleurs autorisées, en minuscules :
+Toute notion est colorée, sans exception. L'écrire sur plusieurs lignes et colorer chaque ligne
+avec une balise en DÉBUT de ligne : `[couleur] texte`. Couleurs autorisées, en minuscules :
+bleu, vert, orange, rouge, gris.
 
-- bleu = bas / insuffisant (ex. hypoglycémie)
-- vert = normal / cible
-- orange = à surveiller (ex. prédiabète)
-- rouge = danger / pathologique (ex. diabète, hypoglycémie sévère)
-- gris = repère, conversion ou contexte neutre
+Claude choisit seul la logique d'attribution la plus pertinente pour le contenu, sans poser la
+question, et la garde **cohérente au sein d'un même chapitre** (même couleur = même sens d'une
+notion à l'autre). Logiques possibles :
+
+- **Niveaux ou seuils** : bleu = bas / insuffisant, vert = normal / cible, orange = à surveiller,
+  rouge = danger / pathologique, gris = repère, conversion ou contexte neutre.
+- **Familles, catégories ou produits** : une couleur par catégorie. Ex. pansements : gris =
+  protection basique, bleu = plaies sèches ou superficielles, vert = exsudat modéré, orange =
+  exsudat important, rouge = plaie infectée ou malodorante.
+- **Étapes ou stades** : une couleur par étape, dans l'ordre de gravité ou de progression.
 
 Règles :
 
@@ -109,21 +114,35 @@ Règles :
   coloré au milieu d'une phrase.
 - Le texte de la ligne reste explicite (« Normale : 0,70 à 1,10 g/L », « Diabète : ≥ 1,26 g/L ») :
   la couleur ne remplace jamais le libellé.
-- Ne colorer que si l'utilisateur donne des niveaux : n'inventer ni seuil ni niveau. Une notion
-  sans niveaux (définition, mécanisme, conseil) reste en texte simple, sans balise.
+- Les couleurs ne servent qu'à classer ce qui est dit : n'inventer ni seuil, ni niveau, ni
+  catégorie que l'utilisateur n'a pas donné (règle de fond 1).
+- Notion sans niveaux ni catégories évidents (définition, mécanisme, conseil) : colorer la
+  première ligne (titre ou contexte) avec la couleur de sa catégorie dans le chapitre, le reste
+  du contenu en texte simple.
 - Séparer les lignes par un retour à la ligne dans la valeur SQL (littéral multi-lignes,
-  apostrophes doublées). Exemple :
+  apostrophes doublées). Exemples :
 
 ```sql
+-- logique « niveaux » (chapitre Diabète)
 insert into pharma_notions (chapitre_id, titre, contenu, tags, ordre)
 values ('<chapitre_id>', 'Glycémie à jeun', '[bleu] Hypoglycémie : < 0,70 g/L
 [vert] Normale : 0,70 à 1,10 g/L
 [orange] Prédiabète : 1,10 à 1,25 g/L
 [rouge] Diabète : ≥ 1,26 g/L', array['glycémie'], <ordre>);
+
+-- logique « catégories » (chapitre Pansements et plaies, matière Conseil officinal) :
+-- uniquement les catégories et libellés donnés par l'utilisateur dans sa dictée
+insert into pharma_notions (chapitre_id, titre, contenu, tags, ordre)
+values ('<chapitre_id>', 'Choix du pansement selon la plaie', '[gris] Protection basique
+[bleu] Plaies sèches ou superficielles
+[vert] Exsudat modéré
+[orange] Exsudat important
+[rouge] Plaie infectée ou malodorante', array['pansement','plaie'], <ordre>);
 ```
 
 - Les cartes de révision peuvent utiliser les mêmes balises dans `reponse` quand la réponse
-  est un niveau (ex. « [rouge] Diabète : ≥ 1,26 g/L »), mais restent en texte simple sinon.
+  est un niveau ou une catégorie colorée (ex. « [rouge] Diabète : ≥ 1,26 g/L »), mais restent
+  en texte simple sinon.
 - Pour repérer un doublon avec `pharma_rechercher`, chercher sur un mot du texte : les balises
   n'ont aucun effet sur la recherche dans l'app.
 
@@ -161,7 +180,7 @@ Une à trois phrases, sans recopier le contenu :
 
 - où c'est rangé (`Pharmacologie › Antihypertenseurs`), combien de notions et de cartes ;
 - toute réorganisation faite (« j'ai créé le chapitre X », « j'ai fusionné Y dans Z ») ;
-- si des lignes ont été colorées (seuils, niveaux), le mentionner ;
+- la logique de couleurs choisie, en une phrase (« couleurs par niveaux de gravité », « une couleur par type de pansement »…) ;
 - si la dictée **contredit** une notion existante, l'écrire clairement (« ça contredit la
   notion "…" que j'ai gardée / remplacée ») : la contradiction est signalée dans le chat, pas
   stockée.
