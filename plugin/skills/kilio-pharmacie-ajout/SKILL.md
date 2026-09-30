@@ -91,6 +91,42 @@ set contenu = '<contenu fusionné>', tags = array['<tags fusionnés>'], updated_
 where id = '<notion_id>';
 ```
 
+## Couleurs des seuils
+
+Quand une notion contient des seuils, des niveaux ou des plages de valeurs (glycémie, tension,
+HbA1c, INR…), l'écrire sur plusieurs lignes et colorer chaque niveau avec une balise en DÉBUT
+de ligne : `[couleur] texte`. Couleurs autorisées, en minuscules :
+
+- bleu = bas / insuffisant (ex. hypoglycémie)
+- vert = normal / cible
+- orange = à surveiller (ex. prédiabète)
+- rouge = danger / pathologique (ex. diabète, hypoglycémie sévère)
+- gris = repère, conversion ou contexte neutre
+
+Règles :
+
+- Une seule balise par ligne, au tout début, suivie d'un espace puis du texte. Pas de segment
+  coloré au milieu d'une phrase.
+- Le texte de la ligne reste explicite (« Normale : 0,70 à 1,10 g/L », « Diabète : ≥ 1,26 g/L ») :
+  la couleur ne remplace jamais le libellé.
+- Ne colorer que si l'utilisateur donne des niveaux : n'inventer ni seuil ni niveau. Une notion
+  sans niveaux (définition, mécanisme, conseil) reste en texte simple, sans balise.
+- Séparer les lignes par un retour à la ligne dans la valeur SQL (littéral multi-lignes,
+  apostrophes doublées). Exemple :
+
+```sql
+insert into pharma_notions (chapitre_id, titre, contenu, tags, ordre)
+values ('<chapitre_id>', 'Glycémie à jeun', '[bleu] Hypoglycémie : < 0,70 g/L
+[vert] Normale : 0,70 à 1,10 g/L
+[orange] Prédiabète : 1,10 à 1,25 g/L
+[rouge] Diabète : ≥ 1,26 g/L', array['glycémie'], <ordre>);
+```
+
+- Les cartes de révision peuvent utiliser les mêmes balises dans `reponse` quand la réponse
+  est un niveau (ex. « [rouge] Diabète : ≥ 1,26 g/L »), mais restent en texte simple sinon.
+- Pour repérer un doublon avec `pharma_rechercher`, chercher sur un mot du texte : les balises
+  n'ont aucun effet sur la recherche dans l'app.
+
 ### 4. Créer les cartes de révision (automatique)
 
 1 à 3 cartes par notion **nouvelle ou enrichie** : question courte et autonome, réponse brève
@@ -125,6 +161,7 @@ Une à trois phrases, sans recopier le contenu :
 
 - où c'est rangé (`Pharmacologie › Antihypertenseurs`), combien de notions et de cartes ;
 - toute réorganisation faite (« j'ai créé le chapitre X », « j'ai fusionné Y dans Z ») ;
+- si des lignes ont été colorées (seuils, niveaux), le mentionner ;
 - si la dictée **contredit** une notion existante, l'écrire clairement (« ça contredit la
   notion "…" que j'ai gardée / remplacée ») : la contradiction est signalée dans le chat, pas
   stockée.
