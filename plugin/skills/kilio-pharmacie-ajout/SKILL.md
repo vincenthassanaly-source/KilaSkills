@@ -94,8 +94,23 @@ where id = '<notion_id>';
 ## Couleurs
 
 Toute notion est colorée, sans exception. L'écrire sur plusieurs lignes et colorer chaque ligne
-avec une balise en DÉBUT de ligne : `[couleur] texte`. Couleurs autorisées, en minuscules :
-bleu, vert, orange, rouge, gris.
+avec une balise en DÉBUT de ligne : `[couleur] texte`. 12 couleurs autorisées, en minuscules,
+sans accent, en un seul mot. Toute autre balise s'affiche comme du texte normal.
+
+Couleurs à sens fixe (seuils et niveaux) :
+
+- bleu = bas / insuffisant (ex. hypoglycémie)
+- vert = normal / cible
+- orange = à surveiller (ex. prédiabète)
+- rouge = danger / pathologique (ex. diabète, hypoglycémie sévère)
+- gris = repère, conversion ou contexte neutre
+
+Couleurs de catégorie : violet, rose, jaune, turquoise, marron, indigo, lime. Elles n'ont AUCUN
+sens fixe : elles servent à distinguer des catégories, produits ou familles (ex. un type de
+pansement par couleur). Claude choisit l'attribution, mais la garde cohérente au sein d'un
+chapitre : une même catégorie garde la même couleur d'une notion à l'autre, et deux catégories
+différentes n'en partagent pas. Ne pas utiliser ces couleurs pour un niveau de gravité (réservé
+aux 5 couleurs à sens fixe) ni mélanger les deux usages dans une même notion.
 
 Claude choisit seul la logique d'attribution la plus pertinente pour le contenu, sans poser la
 question, et la garde **cohérente au sein d'un même chapitre** (même couleur = même sens d'une
