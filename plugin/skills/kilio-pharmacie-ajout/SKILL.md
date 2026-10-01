@@ -1,6 +1,6 @@
 ---
 name: kilio-pharmacie-ajout
-description: "Ranger dans le module Pharmacie de Kilio une info apprise (cours, molécule, conseil, interaction…) dictée en vrac dans le chat : Claude la reformule en notions atomiques, la classe dans matière → chapitre, colore systématiquement le contenu (logique de couleurs choisie par Claude : niveaux, catégories ou étapes), crée les cartes de révision et écrit en base via Supabase. Utiliser quand l'utilisateur dit « j'ai appris que… », « retiens ça en pharmacie », « ajoute ça à mes cours de pharma », ou dicte une connaissance de pharmacie à mémoriser."
+description: "Ranger dans le module Pharmacie de Kilio une info apprise (cours, molécule, conseil, interaction…) dictée en vrac dans le chat : Claude la reformule en notions atomiques, la classe dans matière → chapitre, colore systématiquement le contenu (logique de couleurs choisie par Claude : niveaux, catégories ou étapes), crée les cartes de révision et écrit en base via Supabase. Utiliser quand l'utilisateur dit « j'ai appris que… », « retiens ça en pharmacie », « ajoute ça à mes cours de pharma », ou dicte une connaissance de pharmacie à mémoriser. Gère aussi le RÉFÉRENTIEL (classes, molécules, spécialités, pathologies et traitements) : utiliser quand l'utilisateur dit « Ajoute <médicament> à la base de données » ou formulation proche — Claude range la molécule dans Famille › Classe › DCI, ajoute les marques courantes et n'écrit rien d'autre que ce qui est dicté."
 metadata:
   origin: kilio
 ---
@@ -18,6 +18,9 @@ les données.
 - Tables : `pharma_matieres`, `pharma_chapitres`, `pharma_notions`, `pharma_cartes`,
   `pharma_historique`. L'utilisateur ne garde **que la version reformulée** (pas de journal brut).
   Pas de suivi de source ni de vérification web : c'est son cahier personnel.
+- Le skill gère deux domaines : le **cahier de cours** (sections ci-dessous) et le
+  **référentiel** (section « Référentiel » en fin de document). « Ajoute <médicament> à la base
+  de données » = référentiel, pas une notion du cahier.
 
 ## Règles de fond
 
@@ -200,9 +203,132 @@ Une à trois phrases, sans recopier le contenu :
   notion "…" que j'ai gardée / remplacée ») : la contradiction est signalée dans le chat, pas
   stockée.
 
+## Référentiel
+
+Tables (schéma `public`), pour le référentiel du module Pharmacie :
+
+- `pharma_ref_classes` (id, nom, parent_id → classe parente = « famille », atc, mecanisme,
+  contre_indications, interactions, conseils, ordre). Index unique sur `lower(nom)`.
+- `pharma_ref_molecules` (id, dci, classe_id NOT NULL, association, composants[], indications[],
+  particularites, ordre). Index unique sur `lower(dci)`.
+- `pharma_ref_specialites` (molecule_id, nom, dosages). Unique (molecule_id, `lower(nom)`).
+- `pharma_ref_pathologies` (id, nom, resume, source, source_date, ordre). Unique sur `lower(nom)`.
+- `pharma_ref_lignes` (pathologie_id, profil default 'Général', rang, titre, description).
+- `pharma_ref_ligne_items` (ligne_id, classe_id OU molecule_id, role in
+  ('traitement','association','eviter'), note, ordre).
+- `pharma_cartes` peut pointer vers une molécule (`molecule_id`) au lieu d'une notion.
+
+Ces tables partent de zéro : l'utilisateur les remplit au fil de l'eau par le chat.
+
+### Règles
+
+1. **Déclencheur** : « Ajoute <médicament> à la base de données » (ou formulation proche) =
+   fiche molécule dans le référentiel, pas une notion du cahier.
+2. **N'écrire que ce que l'utilisateur dit**, plus le strict nécessaire structurel ci-dessous.
+   Jamais d'indications, contre-indications, mécanisme, interactions, conseils, particularités,
+   dosages ni cartes de révision, sauf si l'utilisateur les dicte. Cartes : seulement pour des
+   faits dictés.
+3. **Classe et famille** : les déduire avec les connaissances de Claude (ex. ramipril → classe
+   « IEC », parent « Antihypertenseurs » ou équivalent). Réutiliser une classe existante
+   (recherche insensible à la casse et aux accents) avant d'en créer. Une classe ou famille créée
+   n'a que son nom (et `parent_id`) : tous les autres champs restent null. Les noms de classe
+   suivent les noms usuels déjà présents en base.
+4. **Spécialités** : ajouter les noms de marque courants (ex. Triatec) dans
+   `pharma_ref_specialites`, SANS dosages (colonne null), sauf si l'utilisateur en donne. C'est
+   la seule exception à la règle 2.
+5. **Pathologies et traitements** : ne créer de lien que si l'utilisateur cite la pathologie
+   (« dans l'HTA »). Dans ce cas : créer la pathologie si absente (nom seulement), créer la
+   ligne (profil « Général », rang donné ou suivant, titre court) si besoin, puis un item
+   (role « traitement » par défaut) vers la molécule. Sans pathologie citée : aucun lien.
+6. **Doublons** : avant d'insérer, vérifier (dci, classe, spécialité) et utiliser
+   `on conflict do nothing` / réutiliser l'existant. Échapper les apostrophes (`''`).
+7. **Réponse en 1 à 3 phrases** : où la molécule est rangée (Famille › Classe › DCI), ce qui a
+   été créé (classe, famille, marques) pour que l'utilisateur corrige, et un rappel que rien
+   d'autre n'a été renseigné.
+8. **Journal** : consigner dans `pharma_historique` la création de classe, famille ou
+   pathologie décidée par Claude (action `'creation'`, cible, details jsonb).
+
+### Déroulé
+
+Chercher d'abord l'existant (insensible à la casse ; pour les accents, `unaccent()` si
+l'extension est disponible, sinon comparer en `lower()`) :
+
+```sql
+select c.id, c.nom, p.nom as parent
+from pharma_ref_classes c left join pharma_ref_classes p on p.id = c.parent_id
+order by p.nom nulls first, c.nom;
+
+select id, dci, classe_id from pharma_ref_molecules where lower(dci) = lower('<dci>');
+```
+
+Créer la famille puis la classe si absentes (nom et `parent_id` seulement), puis les journaliser :
+
+```sql
+insert into pharma_ref_classes (nom, parent_id, ordre)
+values ('<nom>', <'<parent_id>' ou null>,
+        (select coalesce(max(ordre), -1) + 1 from pharma_ref_classes))
+on conflict do nothing
+returning id;
+
+insert into pharma_historique (action, cible, details)
+values ('creation', 'Référentiel › <Famille> › <Classe>',
+        '{"type": "classe", "nom": "<nom>", "parent": "<famille ou null>"}'::jsonb);
+```
+
+(Si `on conflict do nothing` ne renvoie rien, relire l'id existant.) Molécule : DCI et
+`classe_id` seulement, les autres colonnes restent à leur défaut :
+
+```sql
+insert into pharma_ref_molecules (dci, classe_id, ordre)
+values ('<dci>', '<classe_id>',
+        (select coalesce(max(ordre), -1) + 1 from pharma_ref_molecules))
+on conflict do nothing
+returning id;
+```
+
+Marques courantes, sans dosages :
+
+```sql
+insert into pharma_ref_specialites (molecule_id, nom)
+values ('<molecule_id>', '<Marque1>'), ('<molecule_id>', '<Marque2>')
+on conflict do nothing;
+```
+
+Seulement si l'utilisateur cite une pathologie (« dans l'HTA ») :
+
+```sql
+-- pathologie (nom seulement) + journal si créée
+insert into pharma_ref_pathologies (nom, ordre)
+values ('<nom>', (select coalesce(max(ordre), -1) + 1 from pharma_ref_pathologies))
+on conflict do nothing returning id;
+
+-- ligne : profil 'Général' (défaut), rang donné ou suivant, titre court
+insert into pharma_ref_lignes (pathologie_id, rang, titre)
+values ('<pathologie_id>',
+        <rang donné ou (select coalesce(max(rang), 0) + 1 from pharma_ref_lignes where pathologie_id = '<pathologie_id>')>,
+        '<titre court>')
+returning id;
+
+-- item vers la molécule (role 'traitement' par défaut)
+insert into pharma_ref_ligne_items (ligne_id, molecule_id, role, ordre)
+values ('<ligne_id>', '<molecule_id>', 'traitement',
+        (select coalesce(max(ordre), -1) + 1 from pharma_ref_ligne_items where ligne_id = '<ligne_id>'));
+```
+
+Réutiliser la ligne existante (même pathologie, profil « Général », même rang ou titre) plutôt
+que d'en créer une seconde, et ne pas dupliquer un item déjà présent. Journaliser la création
+de la pathologie comme celle d'une classe (`'{"type": "pathologie", "nom": "..."}'::jsonb`).
+
+Si l'utilisateur dicte des faits (indication, mécanisme, dosage…), les écrire dans la colonne
+correspondante, mot pour mot reformulé, sans rien ajouter. Cartes sur une molécule : seulement
+pour ces faits dictés, via `pharma_cartes.molecule_id`.
+
 ## Garde-fous
 
 - Ne jamais supprimer une notion ou une matière sur simple soupçon : suppression seulement si
   l'utilisateur la demande ; sinon renvoyer vers l'app (« Modifier » sur la notion).
 - Si l'info est trop vague pour être une notion (pas d'idée précise), poser une question.
+- Référentiel : ne jamais renseigner un champ non dicté (hors nom, classe, famille, marques),
+  ne jamais créer de lien pathologie ↔ molécule sans pathologie citée, ne jamais supprimer ni
+  écraser une fiche existante (classe, molécule, spécialité) sans demande explicite.
 - Aucun commit, aucun push : ce skill n'agit que sur les données Supabase.
