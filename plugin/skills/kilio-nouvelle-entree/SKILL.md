@@ -1,6 +1,6 @@
 ---
 name: kilio-nouvelle-entree
-description: "Créer une nouvelle entrée dans l'application Kilio (tâche ou note) directement depuis le chat, sans ouvrir l'app. Utiliser quand l'utilisateur demande d'ajouter/créer une tâche, un rappel, une note ou une checklist dans Kilio (ex: \"ajoute une tâche dans Kilio\", \"note-moi ça dans Kilio\", \"crée-moi un rappel\")."
+description: "Créer une nouvelle entrée dans l'application Kilio (tâche ou note) directement depuis le chat, sans ouvrir l'app. Utiliser quand l'utilisateur demande d'ajouter/créer une tâche, un rappel, une note ou une checklist dans Kilio (ex: \"ajoute une tâche dans Kilio\", \"note-moi ça dans Kilio\", \"crée-moi un rappel\"). Sert aussi pour les rappels (\"rappelle-moi\", \"mets un rappel\")."
 metadata:
   origin: kilaskills
 ---
@@ -47,6 +47,17 @@ FK vers `listes_taches`). Toutes les autres ont un défaut ou acceptent `null`.
      ou `null`. `recurrence_fin` n'a de sens qu'accompagnée d'une fréquence.
    - `rappel_minutes` : un des `5 | 15 | 30 | 60 | 1440`, uniquement si une heure est
      définie (ou `1440` seul avec `toute_la_journee = true`, pour un rappel la veille).
+     Si la demande contient « rappel », « rappelle-moi » ou « mets-moi un rappel »,
+     il ne doit **jamais** rester à `null` (sinon le rappel n'est jamais déclenché) :
+     - Valeur par défaut : `5` (rappel 5 minutes avant). La valeur « à l'heure pile »
+       (`0`) n'est pas acceptée : la contrainte `taches_rappel_minutes_check` de la
+       base n'autorise que `5 | 15 | 30 | 60 | 1440`.
+     - Si l'utilisateur précise un délai (« 1 h avant », « la veille »), l'utiliser :
+       `5`, `15`, `30`, `60` ou `1440`.
+     - Rappel sans heure : ne pas inventer d'heure. Soit poser la question, soit, si
+       seule une date est donnée, `toute_la_journee = true` avec `rappel_minutes = 1440`.
+     - Exemple : « Rappelle-moi lundi à 10 h de faire une commande » → `echeance` = date
+       du lundi, `heure` = `10:00`, `rappel_minutes` = `5` (valeur par défaut ci-dessus).
    - `notes` : texte libre optionnel (`null` si absent), distinct du contenu d'une
      "note" Kilio — c'est juste un champ de description sur la tâche.
 4. Insérer :
