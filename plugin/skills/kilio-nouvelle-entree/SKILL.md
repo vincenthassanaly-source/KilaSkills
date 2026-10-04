@@ -54,10 +54,20 @@ FK vers `listes_taches`). Toutes les autres ont un défaut ou acceptent `null`.
        base n'autorise que `5 | 15 | 30 | 60 | 1440`.
      - Si l'utilisateur précise un délai (« 1 h avant », « la veille »), l'utiliser :
        `5`, `15`, `30`, `60` ou `1440`.
-     - Rappel sans heure : ne pas inventer d'heure. Soit poser la question, soit, si
-       seule une date est donnée, `toute_la_journee = true` avec `rappel_minutes = 1440`.
+     - Rappel sans heure (« rappelle-moi », « mets un rappel »… sans heure précisée) :
+       ne pas poser de question et ne pas utiliser `toute_la_journee = true` /
+       `rappel_minutes = 1440`. Par défaut, le rappel a lieu le jour même de l'échéance
+       à 10 h : `heure` = `10:00`, `toute_la_journee = false`, `rappel_minutes` = `5`
+       (valeur par défaut ci-dessus ; `0` refusé par `taches_rappel_minutes_check`).
+       - Si l'utilisateur donne une date (« dans une semaine », « lundi »…) :
+         `echeance` = cette date et `heure` = `10:00`.
+       - S'il ne donne aucune date : `echeance` = date du jour et `heure` = `10:00`.
+       - Une heure ou un délai précisé par l'utilisateur (« la veille », « 1 h avant »)
+         prime toujours sur ce défaut.
      - Exemple : « Rappelle-moi lundi à 10 h de faire une commande » → `echeance` = date
        du lundi, `heure` = `10:00`, `rappel_minutes` = `5` (valeur par défaut ci-dessus).
+     - Exemple : « Rappelle-moi dans une semaine d'annuler X » → `echeance` = date du
+       jour + 7 jours, `heure` = `10:00`, `rappel_minutes` = `5`.
    - `notes` : texte libre optionnel (`null` si absent), distinct du contenu d'une
      "note" Kilio — c'est juste un champ de description sur la tâche.
 4. Insérer :
