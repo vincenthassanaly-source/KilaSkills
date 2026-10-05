@@ -1,14 +1,14 @@
 ---
 name: kilio-nouvelle-entree
-description: "Créer une nouvelle entrée dans l'application Kilio (tâche ou note) directement depuis le chat, sans ouvrir l'app. Utiliser quand l'utilisateur demande d'ajouter/créer une tâche, un rappel, une note ou une checklist dans Kilio (ex: \"ajoute une tâche dans Kilio\", \"note-moi ça dans Kilio\", \"crée-moi un rappel\"). Sert aussi pour les rappels (\"rappelle-moi\", \"mets un rappel\")."
+description: "Créer une nouvelle entrée dans l'application Kilio (tâche, note ou événement) directement depuis le chat, sans ouvrir l'app. Utiliser quand l'utilisateur demande d'ajouter/créer une tâche, un rappel, une note, une checklist ou un événement/rendez-vous dans Kilio (ex: \"ajoute une tâche dans Kilio\", \"note-moi ça dans Kilio\", \"crée-moi un rappel\", \"mets un rendez-vous dentiste jeudi à 15h\", \"ajoute un événement\"). Sert aussi pour les rappels (\"rappelle-moi\", \"mets un rappel\") et pour les rendez-vous, appels, déjeuners ou réunions datés."
 metadata:
   origin: kilaskills
 ---
 
 # Nouvelle entrée Kilio
 
-Crée directement en base de données une nouvelle tâche ou une nouvelle note pour
-l'application Kilio, via le serveur MCP Supabase (outils `mcp__Supabase__execute_sql`
+Crée directement en base de données une nouvelle tâche, une nouvelle note ou un
+nouvel événement pour l'application Kilio, via le serveur MCP Supabase (outils `mcp__Supabase__execute_sql`
 et compagnie). Kilio n'expose pas d'API publique de création (seules des Server
 Actions Next.js internes existent) : ce skill reproduit leur logique de validation
 directement en SQL, sur la base du projet Supabase du même nom.
@@ -114,12 +114,45 @@ uniquement pour `type = 'texte'` — une checklist porte son contenu dans
    values ('<note_id>', '<libelle_1>', 0), ('<note_id>', '<libelle_2>', 1), ...;
    ```
 
+## 3. Créer un événement
+
+Table `public.evenements` : un événement léger (rendez-vous, appel, déjeuner,
+réunion) affiché dans « Aujourd'hui » et dans l'agenda, sans case à cocher.
+Colonnes obligatoires : `titre` (text), `date` (`YYYY-MM-DD`), `heure` (`HH:MM`),
+`heure_fin` (`HH:MM`). Optionnelle : `notes` (text, `null` si absent).
+
+**Événement ou tâche ?** Règles de choix (cf. `src/app/actions/evenements.ts`) :
+- Un rendez-vous, appel, déjeuner ou réunion **avec une heure** → événement.
+- « Rappelle-moi de… », ou une chose à faire / à cocher → tâche (section 1).
+- Si la demande est vraiment ambiguë, poser la question plutôt que de deviner.
+
+Règles de validation, identiques à l'app :
+1. `titre` non vide (après `trim`).
+2. **Heure obligatoire** : pas de « journée entière » pour un événement. Si
+   l'utilisateur n'en donne pas, la lui demander (ne pas inventer d'heure, ne pas
+   basculer en tâche).
+3. **Durée** : 60 minutes par défaut, sinon celle demandée (entier ≥ 1). La base ne
+   stocke pas la durée mais `heure_fin` = `heure` + durée.
+4. L'événement doit tenir dans la journée : `heure_fin` strictement avant minuit
+   (`23:59` au plus). Sinon, demander à l'utilisateur de raccourcir ou de changer
+   l'heure.
+5. Résoudre les dates relatives (« jeudi », « demain ») en date absolue
+   `YYYY-MM-DD` à partir de la date du jour (fuseau Paris).
+
+```sql
+insert into evenements (titre, date, heure, heure_fin, notes)
+values ('<titre>', '<YYYY-MM-DD>', '<HH:MM>', '<HH:MM>', <notes|null>)
+returning id, titre, date, heure, heure_fin;
+```
+
+Confirmer en une phrase : titre, date et plage horaire (ex. « 15:00 – 16:00 »).
+
 ## Garde-fous
 
 - Si un champ obligatoire manque (titre vide, liste introuvable et pas de liste par
-  défaut, etc.), poser la question à l'utilisateur plutôt que d'insérer une valeur
-  inventée.
-- Ne jamais modifier ou supprimer une tâche/note existante avec ce skill : il ne
-  gère que la création. Pour toute autre opération, renvoyer vers l'application.
+  défaut, heure d'événement absente, etc.), poser la question à l'utilisateur
+  plutôt que d'insérer une valeur inventée.
+- Ne jamais modifier ou supprimer une tâche/note/événement existant avec ce skill :
+  il ne gère que la création. Pour toute autre opération, renvoyer vers l'application.
 - Ce skill ne fait ni commit ni push : il agit uniquement sur les données de
   production Kilio via Supabase, jamais sur le code du dépôt.
