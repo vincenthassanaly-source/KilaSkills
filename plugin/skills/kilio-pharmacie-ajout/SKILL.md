@@ -249,7 +249,7 @@ Ces tables partent de zéro : l'utilisateur les remplit au fil de l'eau par le c
    été créé (classe, famille, marques) pour que l'utilisateur corrige, et un rappel que rien
    d'autre n'a été renseigné. Si du contenu a été mis sur la fiche, rappeler en une phrase la
    logique de couleurs utilisée (rouge = danger, orange = à surveiller ou à éviter, vert = dose
-   et cible, gris = mécanisme et contexte).
+   et cible, gris = mécanisme et contexte, bleu = avantages).
 8. **Journal** : consigner dans `pharma_historique` la création de classe, famille ou
    pathologie décidée par Claude (action `'creation'`, cible, details jsonb).
 
@@ -338,12 +338,20 @@ Le champ `particularites` suit toujours ce modèle (uniquement avec le contenu d
   - `[rouge]` = danger : risque principal, interactions contre-indiquées, contre-indications ;
   - `[orange]` = à surveiller ou à éviter : surveillance biologique, produits ou médicaments à éviter ;
   - `[vert]` = dose et cible ;
-  - `[gris]` = mécanisme, contexte, avantage sur un autre médicament.
-- Sections dans cet ordre, **uniquement celles qui ont du contenu** : MÉCANISME, DOSE,
-  SURVEILLANCE, INTERACTIONS, À ÉVITER, CONTRE-INDICATION, AVANTAGE SUR <médicament comparé>.
-- Le titre prend la couleur de sa section, et chaque ligne de la section garde cette couleur,
-  sauf un point de danger isolé (ex. « Risque principal : hyperkaliémie » en `[rouge]` dans la
-  section SURVEILLANCE `[orange]`).
+  - `[gris]` = mécanisme et contexte ;
+  - `[bleu]` = avantages.
+- Sections dans cet ordre, uniquement celles qui ont du contenu, avec ces titres et couleurs fixes :
+  MÉCANISME [gris] → DOSE [vert] → SURVEILLANCE [orange] → INTERACTIONS [rouge]
+  → À ÉVITER [orange] → CONTRE-INDICATIONS [rouge] → AVANTAGES [bleu].
+- Chaque section s'affiche en une carte. Un titre en MAJUSCULES (3 lettres ou plus, aucune
+  minuscule) ouvre la section : ne jamais écrire une ligne d'info entièrement en majuscules
+  (écrire « AINS (risque rénal…) », jamais « AINS » seul).
+- Une ligne dont la couleur diffère de sa section est réservée à un point isolé (ex. « Risque
+  principal : hyperkaliémie » en [rouge] dans SURVEILLANCE) : elle ressort en gras.
+- Sous-titre dans une section (fiche à plusieurs indications, ex. empagliflozine) :
+  `[gris] # Diabète de type 2`. Pas de numérotation « 1. Titre », une phrase par ligne.
+- AVANTAGES : le médicament comparé va dans la ligne, pas dans le titre
+  (`[bleu] Avantage sur la spironolactone : pas de gynécomastie …`).
 - **Termes techniques** : les expliquer simplement entre parenthèses la première fois
   (« hyperkaliémie (trop de potassium) », « CYP3A4 (enzyme du foie) »). Phrases courtes, aller
   à l'essentiel.
@@ -379,12 +387,26 @@ set indications = array[
 [orange] Sels de régime au potassium.
 [orange] AINS (risque rénal et hyperkaliémique).
 
-[rouge] CONTRE-INDICATION
+[rouge] CONTRE-INDICATIONS
 [rouge] Insuffisance rénale sévère.
 
-[gris] AVANTAGE SUR LA SPIRONOLACTONE
-[gris] Pas de gynécomastie (développement des seins chez l''homme).'
+[bleu] AVANTAGES
+[bleu] Avantage sur la spironolactone : pas de gynécomastie (développement des seins chez l''homme).'
 where lower(dci) = lower('éplérénone');
+```
+
+Exemple court, fiche à plusieurs indications (mécanisme en sous-titres) :
+
+```sql
+update pharma_ref_molecules
+set particularites = '[gris] MÉCANISME
+[gris] # Diabète de type 2
+[gris] Le sucre en trop dans le sang est évacué par les urines (glycosurie), donc la glycémie baisse.
+[gris] L''action ne passe pas par l''insuline : le risque d''hypoglycémie est faible.
+[gris] # Insuffisance cardiaque
+[gris] Le sel et l''eau sont éliminés (natriurèse, diurèse osmotique) : le corps contient un peu moins de liquide.
+[gris] Il travaille moins et il y a moins d''hospitalisations.'
+where lower(dci) = lower('empagliflozine');
 ```
 
 ## Garde-fous
