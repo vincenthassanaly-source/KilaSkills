@@ -227,7 +227,10 @@ Ces tables partent de zéro : l'utilisateur les remplit au fil de l'eau par le c
 2. **N'écrire que ce que l'utilisateur dit**, plus le strict nécessaire structurel ci-dessous.
    Jamais d'indications, contre-indications, mécanisme, interactions, conseils, particularités,
    dosages ni cartes de révision, sauf si l'utilisateur les dicte. Cartes : seulement pour des
-   faits dictés.
+   faits dictés. Quand l'utilisateur demande de mettre un contenu sur la fiche d'un médicament
+   (ex. « mets ça sur la fiche »), ce contenu va dans `pharma_ref_molecules.particularites` (et
+   `indications` pour les indications), structuré avec le modèle « Mise en forme de la fiche »
+   ci-dessous. Toujours rien d'ajouté qui n'ait été dicté.
 3. **Classe et famille** : les déduire avec les connaissances de Claude (ex. ramipril → classe
    « IEC », parent « Antihypertenseurs » ou équivalent). Réutiliser une classe existante
    (recherche insensible à la casse et aux accents) avant d'en créer. Une classe ou famille créée
@@ -244,7 +247,9 @@ Ces tables partent de zéro : l'utilisateur les remplit au fil de l'eau par le c
    `on conflict do nothing` / réutiliser l'existant. Échapper les apostrophes (`''`).
 7. **Réponse en 1 à 3 phrases** : où la molécule est rangée (Famille › Classe › DCI), ce qui a
    été créé (classe, famille, marques) pour que l'utilisateur corrige, et un rappel que rien
-   d'autre n'a été renseigné.
+   d'autre n'a été renseigné. Si du contenu a été mis sur la fiche, rappeler en une phrase la
+   logique de couleurs utilisée (rouge = danger, orange = à surveiller ou à éviter, vert = dose
+   et cible, gris = mécanisme et contexte).
 8. **Journal** : consigner dans `pharma_historique` la création de classe, famille ou
    pathologie décidée par Claude (action `'creation'`, cible, details jsonb).
 
@@ -322,6 +327,65 @@ de la pathologie comme celle d'une classe (`'{"type": "pathologie", "nom": "..."
 Si l'utilisateur dicte des faits (indication, mécanisme, dosage…), les écrire dans la colonne
 correspondante, mot pour mot reformulé, sans rien ajouter. Cartes sur une molécule : seulement
 pour ces faits dictés, via `pharma_cartes.molecule_id`.
+
+### Mise en forme de la fiche
+
+Le champ `particularites` suit toujours ce modèle (uniquement avec le contenu dicté) :
+
+- Une section par thème, chaque section séparée de la suivante par une **ligne vide**.
+- Un **titre en MAJUSCULES** au début de la section, puis **une info par ligne**.
+- Chaque ligne, titre compris, commence par une balise `[couleur]` :
+  - `[rouge]` = danger : risque principal, interactions contre-indiquées, contre-indications ;
+  - `[orange]` = à surveiller ou à éviter : surveillance biologique, produits ou médicaments à éviter ;
+  - `[vert]` = dose et cible ;
+  - `[gris]` = mécanisme, contexte, avantage sur un autre médicament.
+- Sections dans cet ordre, **uniquement celles qui ont du contenu** : MÉCANISME, DOSE,
+  SURVEILLANCE, INTERACTIONS, À ÉVITER, CONTRE-INDICATION, AVANTAGE SUR <médicament comparé>.
+- Le titre prend la couleur de sa section, et chaque ligne de la section garde cette couleur,
+  sauf un point de danger isolé (ex. « Risque principal : hyperkaliémie » en `[rouge]` dans la
+  section SURVEILLANCE `[orange]`).
+- **Termes techniques** : les expliquer simplement entre parenthèses la première fois
+  (« hyperkaliémie (trop de potassium) », « CYP3A4 (enzyme du foie) »). Phrases courtes, aller
+  à l'essentiel.
+- **Indications** : une entrée courte par pastille dans `indications[]`, pas de phrase longue.
+
+Exemple complet (fiche éplérénone), littéral multi-lignes, apostrophes doublées :
+
+```sql
+update pharma_ref_molecules
+set indications = array[
+      'Après un infarctus avec cœur affaibli (FEVG ≤ 40 %), en plus du traitement standard',
+      'Insuffisance cardiaque chronique avec cœur affaibli (FEVG ≤ 30 %, NYHA II), en plus du traitement standard'
+    ],
+    particularites = '[gris] MÉCANISME
+[gris] Bloque l''aldostérone (hormone qui fait retenir sel et eau et perdre du potassium).
+[gris] Résultat : moins de rétention d''eau et de sel, le cœur travaille moins, moins de fibrose (cœur raide et cicatriciel).
+[gris] Utilisé en plus du traitement standard.
+
+[vert] DOSE
+[vert] 25 mg/jour au début.
+[vert] Puis 50 mg/jour après 4 semaines si la kaliémie le permet.
+
+[orange] SURVEILLANCE
+[orange] Kaliémie avant le début, à 1 semaine, à 1 mois, puis régulièrement.
+[rouge] Risque principal : hyperkaliémie (trop de potassium, dangereux pour le rythme cardiaque).
+
+[rouge] INTERACTIONS
+[rouge] Dégradé par le CYP3A4 (enzyme du foie).
+[rouge] Contre-indiqué avec les antifongiques azolés, la clarithromycine et le ritonavir.
+[orange] Jus de pamplemousse à éviter.
+
+[orange] À ÉVITER
+[orange] Sels de régime au potassium.
+[orange] AINS (risque rénal et hyperkaliémique).
+
+[rouge] CONTRE-INDICATION
+[rouge] Insuffisance rénale sévère.
+
+[gris] AVANTAGE SUR LA SPIRONOLACTONE
+[gris] Pas de gynécomastie (développement des seins chez l''homme).'
+where lower(dci) = lower('éplérénone');
+```
 
 ## Garde-fous
 
