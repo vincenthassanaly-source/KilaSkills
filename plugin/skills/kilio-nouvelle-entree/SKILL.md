@@ -1,6 +1,6 @@
 ---
 name: kilio-nouvelle-entree
-description: "Créer une nouvelle entrée dans l'application Kilio (tâche, note ou événement) directement depuis le chat, sans ouvrir l'app. Utiliser quand l'utilisateur demande d'ajouter/créer une tâche, un rappel, une note, une checklist ou un événement/rendez-vous dans Kilio (ex: \"ajoute une tâche dans Kilio\", \"note-moi ça dans Kilio\", \"crée-moi un rappel\", \"mets un rendez-vous dentiste jeudi à 15h\", \"ajoute un événement\"). Sert aussi pour les rappels (\"rappelle-moi\", \"mets un rappel\") et pour les rendez-vous, appels, déjeuners ou réunions datés."
+description: "Créer une nouvelle entrée dans l'application Kilio (tâche, note ou événement) directement depuis le chat, sans ouvrir l'app. Utiliser quand l'utilisateur demande d'ajouter/créer une tâche, un rappel, une note, une checklist ou un événement/rendez-vous dans Kilio (ex: \"ajoute une tâche dans Kilio\", \"note-moi ça dans Kilio\", \"crée-moi un rappel\", \"mets un rendez-vous dentiste jeudi à 15h\", \"ajoute un événement\", \"ajoute à mon planning\", \"mets ça dans mon planning\", \"ajoute à mon agenda\", \"note dans mon planning\"). Sert aussi pour les rappels (\"rappelle-moi\", \"mets un rappel\") et pour les rendez-vous, appels, déjeuners ou réunions datés. \"Planning\" ou \"agenda\" sans autre précision signifie Kilio."
 metadata:
   origin: kilaskills
 ---
@@ -113,6 +113,19 @@ uniquement pour `type = 'texte'` — une checklist porte son contenu dans
    insert into note_items (note_id, libelle, position)
    values ('<note_id>', '<libelle_1>', 0), ('<note_id>', '<libelle_2>', 1), ...;
    ```
+
+## Planning = Kilio
+
+- Quand l'utilisateur demande d'ajouter quelque chose à son « planning » ou à son
+  « agenda » sans préciser l'outil, utiliser ce skill et créer l'entrée dans Kilio.
+  Ne pas utiliser le calendrier de l'appareil ni Google Calendar, sauf s'il les
+  nomme explicitement. Ne pas poser de question sur la destination.
+- Un repas, un rendez-vous, un appel ou une réunion daté devient un événement
+  (table `evenements`).
+- Si l'heure n'est pas donnée, la demander, ainsi que la durée si elle est
+  importante (un repas dure plus que 1 h). Ne pas mettre de « journée entière ».
+- Exemple : « Ajoute à mon planning : repas chez Fanny le 21 novembre » →
+  événement dans Kilio, date 2026-11-21, après avoir demandé l'heure.
 
 ## 3. Créer un événement
 
