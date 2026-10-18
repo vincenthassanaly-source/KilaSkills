@@ -66,11 +66,13 @@ Toujours écrire `"position"` entre guillemets doubles en SQL (nom de fonction P
 Tables de l'onglet « Partis » (détail, contraintes et ce que la base ne vérifie pas :
 `references/partis.md`, section 1) :
 - `opinions_partis` : `id`, `nom` (unique sans tenir compte de la casse), `sigle`
-  (12 caractères max, `''` si aucun), `created_at` ;
+  (12 caractères max, `''` si aucun), `couleur` (une des 10 teintes de l'app, voir
+  `references/partis.md`), `created_at` ;
 - `opinions_programmes` : `parti_id` (cascade), `echeance` (texte libre),
   `date_programme` (date facultative, sert à trouver le programme le plus récent) ;
 - `opinions_propositions` : `programme_id` (cascade), `"position"` (280 caractères max),
-  `theme` (obligatoire), les 5 mêmes scores, `updated_at` ;
+  `theme` (obligatoire), `termes` (mots-clés à surligner et leurs définitions, jsonb),
+  les 5 mêmes scores, `updated_at` ;
 - `opinions_priorites` : `theme` (clé), `niveau` (`secondaire | normal | prioritaire`,
   absent = `normal`) ;
 - `opinions_idees.proposition_id` : rempli **par l'app** quand l'utilisateur « reprend »
@@ -431,14 +433,16 @@ de ton infantilisant.
    d'économie, de droit, d'administration, sigles (TVA, PIB…) et abréviations.
    Une quinzaine de mots, mots courants.
 2. **Dans les propositions stockées** (champ `position`, 280 caractères max) :
-   réécrire en mots simples **et** mettre la définition de chaque terme technique entre
-   parenthèses **dans la phrase**. Chaque ligne s'affiche seule dans l'app : redéfinir
-   le terme dans chaque proposition où il apparaît. Compter les caractères avant
-   d'écrire ; si c'est trop long, simplifier la formulation plutôt que supprimer la
-   définition, et signaler la ligne. Au plus **deux** termes à définir par
-   proposition, sinon couper en deux mesures.
-   Exemple : « Supprimer l'impôt sur la fortune (un impôt que paient seulement les
-   personnes qui possèdent beaucoup de biens, comme des maisons ou des actions). »
+   réécrire en mots simples **et** mettre la définition de chaque terme technique dans
+   `termes` (l'app surligne le mot et montre la définition au tap), pas entre
+   parenthèses dans la phrase. Chaque ligne s'affiche seule dans l'app : redéfinir
+   le terme dans chaque proposition où il apparaît. Compter les caractères de
+   `position` avant d'écrire ; si c'est trop long, simplifier la formulation, et
+   signaler la ligne. Au plus **deux** termes à définir par proposition, sinon couper
+   en deux mesures.
+   Exemple : `position` = « Supprimer l'impôt sur la fortune. », `termes` =
+   `[{"terme": "impôt sur la fortune", "definition": "un impôt que paient seulement les
+   personnes qui possèdent beaucoup de biens, comme des maisons ou des actions"}]`.
 3. **Les définitions restent neutres** : ce que la chose est ou ce que la mesure fait,
    jamais ce qu'on doit en penser. Pour un mot que les partis se disputent, décrire la
    mécanique sans aucun avis. Aucun mot chargé.

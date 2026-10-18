@@ -5,8 +5,9 @@ reçoit toujours la même définition. Les définitions sont **neutres** : elles
 que la chose est ou ce que la mesure fait, jamais ce qu'il faut en penser. Elles tiennent
 en une courte phrase (une quinzaine de mots) avec des mots courants.
 
-Dans une proposition stockée, la définition se met **entre parenthèses dans la phrase**,
-à chaque fois (voir `partis.md`, section 3). En session, la définir à la première
+Dans une proposition stockée, la définition se met dans **`termes`** (le mot est
+surligné dans l'app, la définition s'affiche au tap), à chaque fois, et plus entre
+parenthèses dans la phrase (voir `partis.md`, section 3). En session, la définir à la première
 apparition dans chaque texte.
 
 Un mot technique absent de cette liste se définit avec la même règle, puis on propose à
