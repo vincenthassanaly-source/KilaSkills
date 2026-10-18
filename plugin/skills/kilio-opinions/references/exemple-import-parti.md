@@ -36,12 +36,12 @@ programme officiel lu pendant la session.
 > « plus de libertés pour chacun » et +2 « plus de règles et de contrôles imposés par
 > l'État ».
 >
-> | N° | Thème | Ce qui sera écrit dans Kilio | Ce que dit le programme (version courte) | Éco | Aut | À vérifier |
-> |---|---|---|---|---|---|---|
-> | 1 | fiscalite | Supprimer la TVA (une taxe déjà comprise dans le prix de ce qu'on achète) sur les produits de première nécessité. | « Taux zéro de TVA sur l'alimentation de base. » | -1 | — | Quels produits sont « de première nécessité » ? Le texte ne le précise pas. |
-> | 2 | travail | Augmenter de 10 % le SMIC (la somme la plus basse qu'un employeur a le droit de payer pour une heure de travail). | « Revalorisation du SMIC de 10 %. » | -1 | — | — |
-> | 3 | securite | Créer des peines planchers (une punition minimale fixée par la loi, en dessous de laquelle le juge ne peut pas aller) pour les violences graves. | « Instauration de peines minimales pour les violences aggravées. » | — | 2 | Je n'ai mis que l'axe autorité, car le texte ne parle pas d'argent public. |
-> | 4 | travail | Payer une aide aux entreprises qui prennent des apprentis (des jeunes qui se forment en travaillant dans une entreprise). | « Prime de l'État pour toute embauche d'un apprenti. » | -1 | — | Classement discuté : c'est l'État qui paie (je note -1), mais l'aide va à des entreprises. À toi de trancher. |
+> | N° | Thème | Ce qui sera écrit dans Kilio | Mots expliqués (surlignés dans l'app) | Ce que dit le programme (version courte) | Éco | Aut | À vérifier |
+> |---|---|---|---|---|---|---|---|
+> | 1 | fiscalite | Supprimer la TVA sur les produits de première nécessité. | TVA : une taxe déjà comprise dans le prix de ce qu'on achète | « Taux zéro de TVA sur l'alimentation de base. » | -1 | — | Quels produits sont « de première nécessité » ? Le texte ne le précise pas. |
+> | 2 | travail | Augmenter de 10 % le SMIC. | SMIC : la somme la plus basse qu'un employeur a le droit de payer pour une heure de travail | « Revalorisation du SMIC de 10 %. » | -1 | — | — |
+> | 3 | securite | Créer des peines planchers pour les violences graves. | peines planchers : une punition minimale fixée par la loi, en dessous de laquelle le juge ne peut pas aller | « Instauration de peines minimales pour les violences aggravées. » | — | 2 | Je n'ai mis que l'axe autorité, car le texte ne parle pas d'argent public. |
+> | 4 | travail | Payer une aide aux entreprises qui prennent des apprentis. | apprentis : des jeunes qui se forment en travaillant dans une entreprise | « Prime de l'État pour toute embauche d'un apprenti. » | -1 | — | Classement discuté : c'est l'État qui paie (je note -1), mais l'aide va à des entreprises. À toi de trancher. |
 >
 > *(… 24 autres lignes dans le même format …)*
 >

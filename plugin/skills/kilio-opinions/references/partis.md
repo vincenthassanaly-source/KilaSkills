@@ -11,15 +11,22 @@ réciter à l'utilisateur, lui expliquer le résultat en mots simples.
 
 | Table | Colonnes de fond | Vérifié par la base |
 |---|---|---|
-| `opinions_partis` | `nom`, `sigle` (défaut `''`), `created_at` | `nom` non vide, `nom` unique sans tenir compte de la casse |
+| `opinions_partis` | `nom`, `sigle` (défaut `''`), `couleur` (défaut `indigo`), `created_at` | `nom` non vide, `nom` unique sans tenir compte de la casse, `couleur` ∈ `indigo, corail, olive, prune, turquoise, ambre, ardoise, rose, vert, violet` |
 | `opinions_programmes` | `parti_id` (FK, cascade), `echeance` (texte libre), `date_programme` (date, facultative), `created_at` | `echeance` non vide |
-| `opinions_propositions` | `programme_id` (FK, cascade), `"position"`, `theme`, 5 scores, `created_at`, `updated_at` | `position` non vide, scores entre -2 et +2 ou `null` |
+| `opinions_propositions` | `programme_id` (FK, cascade), `"position"`, `theme`, `termes` (jsonb, défaut `[]`), 5 scores, `created_at`, `updated_at` | `position` non vide, scores entre -2 et +2 ou `null`, `termes` est un tableau |
 | `opinions_priorites` | `theme` (clé primaire), `niveau`, `updated_at` | `niveau` ∈ `secondaire`, `normal`, `prioritaire` |
 | `opinions_idees.proposition_id` | FK nullable vers `opinions_propositions` (`on delete set null`) | — |
 
 **À vérifier soi-même avant d'écrire** (la base ne le fait pas) :
 - `sigle` : 12 caractères au plus (`''` s'il n'y en a pas) ;
-- `position` d'une proposition : 280 caractères au plus, **définitions comprises** ;
+- `position` d'une proposition : 280 caractères au plus ;
+- `couleur` d'un parti : une des 10 teintes. Un parti créé par l'app reçoit la première
+  teinte libre ; à l'import, faire de même (requête de l'étape e) et ne jamais choisir
+  une teinte pour son sens (aucune n'est liée à un camp) ;
+- `termes` d'une proposition : `[{"terme": "TVA", "definition": "…"}]`, 8 entrées au
+  plus, `terme` 60 caractères au plus, `definition` 200 au plus (facultative : sans elle
+  le mot est seulement surligné). Chaque `terme` doit apparaître **tel quel, en mot
+  entier** (casse libre) dans `position`, sans doublon ;
 - `theme` d'une proposition : obligatoire, un des 12 slugs
   (`economie, fiscalite, travail, sante, education, immigration, ecologie, securite,
   institutions, international, culture, numerique`) ;
@@ -64,15 +71,17 @@ Règles :
 
 - Une mesure concrète par ligne ; pas d'adjectif valorisant ou dévalorisant ; pas de
   longue citation du programme.
-- Mots du quotidien, phrases courtes. **Chaque mot technique est défini entre
-  parenthèses dans la phrase elle-même** (chaque ligne s'affiche seule dans l'app),
-  même s'il est déjà défini dans une autre proposition.
-- Au plus **deux** termes à définir par proposition ; sinon couper en deux mesures.
+- Mots du quotidien, phrases courtes. **Chaque mot technique est défini dans `termes`**,
+  pas entre parenthèses dans la phrase : l'app le surligne et affiche la définition au
+  tap. Chaque proposition s'affichant seule, redéfinir le mot dans chaque proposition où
+  il apparaît, même s'il est déjà défini ailleurs.
+- Au plus **deux** mots à définir par proposition ; sinon couper en deux mesures. On peut
+  surligner d'autres mots-clés sans définition (4 mots-clés au plus au total).
 - Les définitions décrivent ce que la chose *est* ou ce que la mesure *fait*, jamais
   ce qu'il faut en penser. Mot disputé : décrire la mécanique sans avis.
 - Contrôler la longueur **avant** d'écrire (requête ci-dessous). Si c'est trop long :
-  simplifier la formulation plutôt que supprimer la définition, et signaler la ligne
-  à l'utilisateur.
+  simplifier la formulation, et signaler la ligne à l'utilisateur. Les définitions de
+  `termes` ne comptent pas dans les 280 caractères.
 - Vérifier que la phrase simple veut dire **exactement** la même chose que l'original
   (même sens, même score), et que deux mesures équivalentes de deux partis ont la même
   neutralité et le même niveau de simplicité.
@@ -145,8 +154,12 @@ lignes du `values`, sinon Postgres ne devine pas le type des `null` :
 
 ```sql
 with p as (
-  insert into opinions_partis (nom, sigle)
-  select '<nom>', '<sigle ≤ 12 car. ou vide>'
+  insert into opinions_partis (nom, sigle, couleur)
+  select '<nom>', '<sigle ≤ 12 car. ou vide>',
+         coalesce(
+           (select c from unnest(array['indigo','corail','olive','prune','turquoise','ambre','ardoise','rose','vert','violet']) with ordinality as t(c, n)
+            where c not in (select couleur from opinions_partis) order by n limit 1),
+           'indigo')
   where not exists (select 1 from opinions_partis where lower(nom) = lower('<nom>'))
   returning id
 ), parti as (
@@ -160,14 +173,14 @@ with p as (
   returning id
 )
 insert into opinions_propositions
-  (programme_id, "position", theme,
+  (programme_id, "position", theme, termes,
    score_economique, score_societal, score_autorite, score_ecologie, score_identite)
-select prog.id, v."position", v.theme, v.s_eco, v.s_soc, v.s_aut, v.s_ecolo, v.s_ident
+select prog.id, v."position", v.theme, v.termes::jsonb, v.s_eco, v.s_soc, v.s_aut, v.s_ecolo, v.s_ident
 from prog
 cross join (values
-  ('<position 1>', '<theme 1>', 1::smallint,  null::smallint, null::smallint, null::smallint, null::smallint),
-  ('<position 2>', '<theme 2>', null::smallint, -1::smallint, null::smallint, null::smallint, null::smallint)
-) as v("position", theme, s_eco, s_soc, s_aut, s_ecolo, s_ident)
+  ('<position 1>', '<theme 1>', '[{"terme":"<mot>","definition":"<définition ≤ 200 car.>"}]', 1::smallint,  null::smallint, null::smallint, null::smallint, null::smallint),
+  ('<position 2>', '<theme 2>', '[]', null::smallint, -1::smallint, null::smallint, null::smallint, null::smallint)
+) as v("position", theme, termes, s_eco, s_soc, s_aut, s_ecolo, s_ident)
 returning id;
 ```
 
@@ -196,7 +209,7 @@ par parti**, avec la même grille, puis faire le contrôle de cohérence par th�
 Lire d'abord ce qui est en base :
 
 ```sql
-select p.id, p.theme, p."position",
+select p.id, p.theme, p."position", p.termes,
        p.score_economique, p.score_societal, p.score_autorite, p.score_ecologie, p.score_identite
 from opinions_propositions p
 where p.programme_id = '<programme_id>'
@@ -208,8 +221,9 @@ Proposer les changements, puis appliquer **après accord** :
 ```sql
 -- Modifier une proposition (réécriture, thème ou scores)
 update opinions_propositions set
-  "position" = '<position ≤ 280 car., définitions comprises>',
+  "position" = '<position ≤ 280 car.>',
   theme = '<theme>',
+  termes = '<[{"terme":"…","definition":"…"}] ou []>'::jsonb,
   score_economique = <..|null>, score_societal = <..|null>, score_autorite = <..|null>,
   score_ecologie = <..|null>, score_identite = <..|null>,
   updated_at = now()
@@ -218,18 +232,18 @@ returning id, "position", theme;
 
 -- Ajouter des propositions à un programme existant (enrichir)
 insert into opinions_propositions
-  (programme_id, "position", theme,
+  (programme_id, "position", theme, termes,
    score_economique, score_societal, score_autorite, score_ecologie, score_identite)
 values
-  ('<programme_id>', '<position>', '<theme>', 1::smallint, null::smallint, null::smallint, null::smallint, null::smallint)
+  ('<programme_id>', '<position>', '<theme>', '[]'::jsonb, 1::smallint, null::smallint, null::smallint, null::smallint, null::smallint)
 returning id;
 
 -- Supprimer une proposition (après accord explicite)
 delete from opinions_propositions where id = '<proposition_id>' returning id;
 ```
 
-Toute proposition modifiée ou ajoutée suit la section 3 (langage simple, définitions,
-280 caractères) et la grille de la section 2. Avant de supprimer ou de réécrire
+Toute proposition modifiée ou ajoutée suit la section 3 (langage simple, mots-clés et
+définitions dans `termes`, 280 caractères) et la grille de la section 2. Avant de supprimer ou de réécrire
 fortement une proposition, vérifier si l'utilisateur l'a déjà « reprise » :
 `select id, "position" from opinions_idees where proposition_id = '<id>'` et l'en
 avertir.
