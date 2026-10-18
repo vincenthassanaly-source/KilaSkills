@@ -8,7 +8,9 @@ en une courte phrase (une quinzaine de mots) avec des mots courants.
 Dans une proposition stockée, la définition se met dans **`termes`** (le mot est
 surligné dans l'app, la définition s'affiche au tap), à chaque fois, et plus entre
 parenthèses dans la phrase (voir `partis.md`, section 3). En session, la définir à la première
-apparition dans chaque texte.
+apparition dans chaque texte. Dans une **explication** (`explication_concret`,
+`explication_pour`, `explication_contre`), les `termes` ne s'affichent pas : redéfinir le mot
+dans le texte lui-même.
 
 Un mot technique absent de cette liste se définit avec la même règle, puis on propose à
 l'utilisateur de l'ajouter ici (modification du fichier `plugin/skills/kilio-opinions/
@@ -31,6 +33,10 @@ plugin : à faire dans une session de travail sur le dépôt).
 | brouillon | une idée pas encore décidée, que tu peux encore changer |
 | validée | une idée que tu as confirmée : c'est vraiment ton avis |
 | priorité (d'un thème) | à quel point un sujet compte pour toi : plus il compte, plus il pèse dans la comparaison |
+| explication | un petit texte qui aide à comprendre une proposition : ce qu'elle change, et les meilleures raisons d'être pour ou contre (elle aide à réfléchir, elle ne dit pas quoi penser) |
+| ce que ça change | ce qui serait différent dans la vie de tous les jours si la proposition était appliquée, avec un exemple, sans dire si c'est bien ou pas |
+| meilleur argument pour | la meilleure raison qu'on peut donner pour soutenir la proposition, présentée de façon solide et honnête |
+| meilleur argument contre | la meilleure raison qu'on peut donner pour s'opposer à la proposition, présentée avec autant de soin que l'argument pour |
 
 ## Les cinq axes (les deux bouts)
 
