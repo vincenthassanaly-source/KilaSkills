@@ -1,6 +1,6 @@
 ---
 name: kilio-opinions
-description: "Aider l'utilisateur à se forger des opinions politiques à partir du module « Opinions » de l'application Kilio (tables Supabase `opinions_idees` et `opinions_versions`) : classer une idée (thème, conviction, scores par axe), jouer l'avocat du diable, repérer ses contradictions, trouver les sujets sans avis, faire un quiz guidé, produire son profil politique. Utiliser quand l'utilisateur dit « classe cette idée », « classe ça », « challenge mes idées », « challenge cette idée », « avocat du diable », « mes contradictions », « sur quoi je n'ai pas d'avis », « sujets à creuser », « fais-moi un quiz politique », « mon profil politique », « range mes brouillons d'opinions », ou parle de ses idées, positions ou opinions politiques dans Kilio. Le skill aide à penser, il ne dit jamais quoi penser : il présente les meilleurs arguments de chaque camp et attend la validation explicite de l'utilisateur avant toute écriture."
+description: "Aider l'utilisateur à se forger des opinions politiques avec le module « Opinions » de Kilio (Supabase : tables opinions_*, idées et partis). Idées : classer une idée (thème, conviction, scores par axe), avocat du diable, contradictions, sujets sans avis, quiz guidé, profil politique. Partis : importer le programme officiel d'un parti, noter ses propositions sur les mêmes axes, comparer les partis, dire qui lui ressemble, priorités par thème. Utiliser pour « classe cette idée », « challenge mes idées », « avocat du diable », « mes contradictions », « sur quoi je n'ai pas d'avis », « fais-moi un quiz politique », « mon profil politique », « range mes brouillons d'opinions », « importe le programme de… », « propositions du parti… », « compare les partis », « qui me ressemble », « mes priorités par thème », ou ses idées, partis et programmes politiques dans Kilio. Aide à penser, jamais à voter : neutre, mots simples, validation explicite avant toute écriture."
 metadata:
   origin: kilaskills
 ---
@@ -25,6 +25,12 @@ les règles que l'app applique dans ses Server Actions (le skill ne passe pas pa
 - Grille de lecture des axes et charte de neutralité : `references/axes-et-neutralite.md`
   (à lire avant de classer ou de challenger pour la première fois de la session).
   Un court exemple de session par comportement : `references/exemples.md`.
+- **Partis politiques** (section 7) : procédures et requêtes SQL dans
+  `references/partis.md`, recherche des sources dans
+  `references/recherche-programmes.md`, mots simples dans
+  `references/lexique-simple.md`, exemple d'import dans
+  `references/exemple-import-parti.md`. Les règles « Langage simple » et « Règle
+  d'équité » plus bas valent pour tout ce qui touche aux partis.
 
 ## Le schéma
 
@@ -56,6 +62,19 @@ de fond (`position, theme, conviction, arguments_pour, arguments_contre, source`
 scores) + `idee_id` (FK vers `opinions_idees`, `on delete cascade`) + `created_at`.
 
 Toujours écrire `"position"` entre guillemets doubles en SQL (nom de fonction Postgres).
+
+Tables de l'onglet « Partis » (détail, contraintes et ce que la base ne vérifie pas :
+`references/partis.md`, section 1) :
+- `opinions_partis` : `id`, `nom` (unique sans tenir compte de la casse), `sigle`
+  (12 caractères max, `''` si aucun), `created_at` ;
+- `opinions_programmes` : `parti_id` (cascade), `echeance` (texte libre),
+  `date_programme` (date facultative, sert à trouver le programme le plus récent) ;
+- `opinions_propositions` : `programme_id` (cascade), `"position"` (280 caractères max),
+  `theme` (obligatoire), les 5 mêmes scores, `updated_at` ;
+- `opinions_priorites` : `theme` (clé), `niveau` (`secondaire | normal | prioritaire`,
+  absent = `normal`) ;
+- `opinions_idees.proposition_id` : rempli **par l'app** quand l'utilisateur « reprend »
+  une proposition. Ne jamais le remplir.
 
 ## Règles d'écriture (non négociables)
 
@@ -365,6 +384,102 @@ Restituer :
 
 Ce profil est calculé à la demande ; il n'est jamais écrit en base.
 
+## 7. Partis politiques (onglet « Partis »)
+
+Procédures, requêtes SQL et formules : `references/partis.md` (à lire avant toute
+action sur les partis). Les formules sont pour Claude : ne pas les réciter, expliquer
+le résultat en mots simples. Aucun lien ni citation n'est stocké en base ; en session,
+toujours dire quelle source officielle a été lue.
+
+1. **Importer un programme** (« importe le programme de X », « ajoute les propositions
+   de X ») : cinq étapes, rien n'est écrit avant l'accord explicite.
+   a. Chercher en base le parti et l'échéance ; si le même programme existe, demander
+   s'il faut l'enrichir ou le remplacer (jamais de doublon silencieux).
+   b. Rechercher et lire le **programme officiel** : `references/recherche-programmes.md`
+   (jamais de mémoire, jamais une source adverse ou partisane).
+   c. Extraire les propositions concrètes, chacune dans un des 12 thèmes, les réécrire
+   en mots simples avec leurs termes définis (≤ 280 caractères) et les noter.
+   d. Présenter un **tableau de validation** (n°, thème, proposition simple, version
+   courte fidèle du texte d'origine, scores, « à vérifier ») + la liste des mots
+   expliqués ; l'utilisateur retire ou corrige des lignes.
+   e. Après accord : écriture **en un seul lot**, contrôle `count(*)`, bilan en mots
+   simples, rappel de tirer pour rafraîchir l'onglet Partis.
+2. **Corriger / compléter** un programme : lire, proposer, appliquer après accord
+   (`update … updated_at = now()`, `insert`, `delete`). Mêmes règles de langage et de
+   notation.
+3. **Comparer des partis** (« compare X et Y sur la santé », « qui propose quoi sur
+   l'immigration ») : propositions du programme le plus récent de chaque parti, thème
+   par thème, côte à côte, sans prendre parti.
+4. **Qui me ressemble** : proximité calculée comme l'app (idées validées pondérées par
+   la conviction ↔ propositions du programme le plus récent, pondération par priorité
+   de thème), toujours avec la **couverture** et le rappel « ce n'est pas un conseil de
+   vote ». Explication type dans `references/partis.md`, section 7.
+5. **Priorités par thème** : lire et modifier `opinions_priorites` à la demande.
+6. **Proposition qui inspire** : proposer à l'utilisateur de la reprendre, mais le
+   laisser le faire dans l'app (bouton « Reprendre dans mes idées »), qui renseigne
+   `proposition_id`.
+
+## Langage simple (tout ce qui touche aux partis)
+
+Tout ce qui est écrit dans Kilio dans la partie Partis **et** tout ce qui est expliqué
+en session à ce sujet doit être compréhensible par un enfant d'une dizaine d'années :
+mots de tous les jours, phrases courtes, une idée par phrase. Simple, pas bête : jamais
+de ton infantilisant.
+
+1. **Chaque mot un peu technique est défini** en quelques mots simples, entre
+   parenthèses, la première fois qu'il apparaît dans un texte : mots de politique,
+   d'économie, de droit, d'administration, sigles (TVA, PIB…) et abréviations.
+   Une quinzaine de mots, mots courants.
+2. **Dans les propositions stockées** (champ `position`, 280 caractères max) :
+   réécrire en mots simples **et** mettre la définition de chaque terme technique entre
+   parenthèses **dans la phrase**. Chaque ligne s'affiche seule dans l'app : redéfinir
+   le terme dans chaque proposition où il apparaît. Compter les caractères avant
+   d'écrire ; si c'est trop long, simplifier la formulation plutôt que supprimer la
+   définition, et signaler la ligne. Au plus **deux** termes à définir par
+   proposition, sinon couper en deux mesures.
+   Exemple : « Supprimer l'impôt sur la fortune (un impôt que paient seulement les
+   personnes qui possèdent beaucoup de biens, comme des maisons ou des actions). »
+3. **Les définitions restent neutres** : ce que la chose est ou ce que la mesure fait,
+   jamais ce qu'on doit en penser. Pour un mot que les partis se disputent, décrire la
+   mécanique sans aucun avis. Aucun mot chargé.
+4. **La simplification ne change jamais le sens ni les scores.** Noter **toujours
+   d'après le texte d'origine** du programme, jamais d'après la version simplifiée.
+   Après simplification, vérifier que la phrase simple veut dire exactement la même
+   chose que l'originale. Même niveau de simplicité pour tous les partis.
+5. **En session** (tableaux de validation, comparaisons, bilan, explication de la
+   proximité, résumé d'un parti) : mêmes règles. Les formules et détails techniques
+   sont pour Claude, pas pour l'utilisateur.
+6. **Les termes de l'application aussi** : programme, proposition, échéance, thème,
+   axe, score, proximité, couverture, conviction, brouillon, validée… sont expliqués
+   simplement. Le lexique est dans `references/lexique-simple.md` : le **relire à
+   chaque import** pour rester cohérent d'un parti à l'autre. Un mot technique qui n'y
+   figure pas se définit avec la même règle, et on propose à l'utilisateur de l'ajouter
+   au lexique à la fin.
+
+## Règle d'équité (la plus importante pour les partis)
+
+Le but est que les partis soient **comparables entre eux**. Pour chaque proposition de
+chaque parti :
+
+1. Noter uniquement ce que dit le **texte du programme**, avec exactement les mêmes
+   pôles pour tous : jamais d'après la réputation du parti, ses alliances, son
+   historique ou le ton de son discours.
+2. Aucun jugement de faisabilité, de sincérité, de coût ou de conséquences : une mesure
+   irréaliste se note comme une mesure réaliste.
+3. Un score seulement sur les axes que la proposition touche **clairement** ; dans le
+   doute, `null` et signaler le cas dans le tableau de validation.
+4. Échelle : `±2` pour une mesure structurelle explicite (création, suppression, refonte
+   majeure) ; `±1` pour un ajustement ou une orientation modérée ; `0` seulement pour
+   une position médiane **explicite**. Jamais `0` par défaut.
+5. Reformulation neutre et simple, une mesure par ligne, sans adjectif valorisant ou
+   dévalorisant, 280 caractères max définitions comprises, sans longue citation.
+6. Même rigueur et même niveau de détail pour tous les partis, y compris ceux dont
+   l'utilisateur est proche ou éloigné. Ne pas sauter un petit parti.
+7. Si la recherche est parallélisée (sous-agents), leur donner **exactement** les mêmes
+   consignes et la même grille, puis relire soi-même **d'une seule traite** les scores
+   d'un même thème pour tous les partis : deux mesures équivalentes = même score.
+8. La simplification des mots ne doit jamais faire pencher une proposition d'un côté.
+
 ## Garde-fous
 
 - Si une information manque (thème, conviction, idée visée ambiguë), poser la question
@@ -373,4 +488,17 @@ Ce profil est calculé à la demande ; il n'est jamais écrit en base.
   a lui-même créé pendant un test explicitement validé par l'utilisateur.
 - Jamais de `0` par défaut, jamais de passage en `validee`/`rejetee` sans accord,
   jamais d'`update` de fond sans version archivée au préalable.
-- Après toute écriture : confirmation en une phrase + rappel « tire pour rafraîchir ».
+- Après toute écriture : confirmation en une phrase + rappel « tire pour rafraîchir »
+  (pour les partis : « tire pour rafraîchir sur l'onglet Partis »).
+- **Partis** : ne jamais supprimer un parti, un programme ou des propositions sans
+  accord explicite, en annonçant d'abord combien de lignes disparaîtront (suppression
+  en cascade). Ne jamais modifier les idées de l'utilisateur ni leur statut dans les
+  comportements « partis », sauf demande explicite. Ne jamais remplir
+  `opinions_idees.proposition_id`.
+- **Partis, neutralité** : rendre les programmes lisibles et comparables, ne pas dire
+  pour qui voter, ne pas qualifier les partis. Signaler les affirmations factuelles
+  contestées ou à vérifier. Les explications simples ne donnent jamais d'avis ni de ton
+  moqueur ou admiratif.
+- **Partis, pas de données de test** : pour vérifier, travailler sur un vrai parti avec
+  l'accord de l'utilisateur, ou lui rendre les requêtes sans les exécuter. Pour
+  valider une écriture sans rien écrire, `EXPLAIN` (sans `ANALYZE`) suffit.
