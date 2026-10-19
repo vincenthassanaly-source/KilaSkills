@@ -13,7 +13,7 @@ réciter à l'utilisateur, lui expliquer le résultat en mots simples.
 |---|---|---|
 | `opinions_partis` | `nom`, `sigle` (défaut `''`), `couleur` (défaut `indigo`), `created_at` | `nom` non vide, `nom` unique sans tenir compte de la casse, `couleur` ∈ `indigo, corail, olive, prune, turquoise, ambre, ardoise, rose, vert, violet` |
 | `opinions_programmes` | `parti_id` (FK, cascade), `echeance` (texte libre), `date_programme` (date, facultative), `created_at` | `echeance` non vide |
-| `opinions_propositions` | `programme_id` (FK, cascade), `"position"`, `theme`, `termes` (jsonb, défaut `[]`), 5 scores, `created_at`, `updated_at` | `position` non vide, scores entre -2 et +2 ou `null`, `termes` est un tableau |
+| `opinions_propositions` | `programme_id` (FK, cascade), `"position"`, `theme`, `termes` (jsonb, défaut `[]`), 5 scores, `explication_concret`, `explication_pour`, `explication_contre` (text, défaut `''`, jamais `null`), `created_at`, `updated_at` | `position` non vide, scores entre -2 et +2 ou `null`, `termes` est un tableau, chaque `explication_*` fait 600 caractères au plus |
 | `opinions_priorites` | `theme` (clé primaire), `niveau`, `updated_at` | `niveau` ∈ `secondaire`, `normal`, `prioritaire` |
 | `opinions_idees.proposition_id` | FK nullable vers `opinions_propositions` (`on delete set null`) | — |
 
@@ -30,6 +30,9 @@ réciter à l'utilisateur, lui expliquer le résultat en mots simples.
 - `theme` d'une proposition : obligatoire, un des 12 slugs
   (`economie, fiscalite, travail, sante, education, immigration, ecologie, securite,
   institutions, international, culture, numerique`) ;
+- `explication_concret`, `explication_pour`, `explication_contre` : `''` = pas encore
+  expliquée, jamais `null`. La base refuse plus de 600 caractères : compter avant
+  d'écrire (section 11) ;
 - pas de doublon (même parti, même échéance) : la base l'autorise, donc c'est au skill
   de le refuser (voir l'étape a de l'import) ;
 - `opinions_idees.proposition_id` : **ne jamais le remplir** (voir section 9).
@@ -199,6 +202,11 @@ order by pr.created_at desc;
 
 Le nombre doit égaler le nombre de lignes validées. Rappeler : l'app met ses données
 en cache, **tirer pour rafraîchir sur l'onglet Partis**.
+
+**Étape f — Proposer les explications.** Une fois le bilan donné, proposer de générer
+les explications des propositions qui viennent d'être écrites (section 11). Ne pas les
+lancer sans réponse : l'utilisateur peut dire non, ou « plus tard » (la section 11 sert
+aussi à la demande, pour un programme déjà importé).
 
 Si l'utilisateur veut importer plusieurs partis, répéter le processus complet **parti
 par parti**, avec la même grille, puis faire le contrôle de cohérence par thème
@@ -418,3 +426,143 @@ group by pa.id, pa.nom;
 Les idées de l'utilisateur ne sont **pas** supprimées : la clé `proposition_id` est en
 `on delete set null`, elles perdent seulement le lien avec la proposition. Le lui dire
 si `idees_reprises_concernees` n'est pas zéro.
+
+## 11. Expliquer les propositions
+
+Déclencheurs : à la suite d'un import (étape f de la section 4), ou seul : « explique les
+propositions de X », « génère les explications du programme de X », « explique la santé
+chez X ». Dans l'app, chaque proposition a un bloc repliable « Comprendre cette
+proposition » ; s'il est vide, l'app affiche « Pas encore expliquée », et les champs vides
+d'une explication partielle sont simplement sautés.
+
+### Les trois champs (600 caractères au plus chacun)
+
+| Colonne | Contenu |
+|---|---|
+| `explication_concret` | ce que la mesure change concrètement : un exemple ou une situation de la vie réelle, **sans jugement** |
+| `explication_pour` | le meilleur argument pour, dans sa version la plus solide |
+| `explication_contre` | le meilleur argument contre, avec la même rigueur et le même niveau de détail |
+
+Ne jamais mettre « ce que disent les autres partis » (périmé dès qu'un parti change ; un
+comparateur par thème est prévu dans l'app). Aucune source ni date n'est stockée :
+l'explication est une aide à penser, **le texte du programme officiel fait foi**. En
+session, dire quelle source officielle a été lue.
+
+### Règles d'écriture
+
+- **Mots simples**, comme le reste de la partie Partis (`lexique-simple.md`, relu avant
+  de commencer) : compréhensible par un enfant d'une dizaine d'années, jamais
+  infantilisant. Un mot technique est redéfini **dans le texte de l'explication** (les
+  `termes` ne s'affichent pas là), la première fois qu'il y apparaît.
+- **Neutre** : aucun adjectif valorisant ou dévalorisant, aucun ton moqueur ou admiratif,
+  aucune recommandation de vote.
+- **Équité** : même grille, même longueur approximative (viser 250 à 450 caractères par
+  champ) et même rigueur pour tous les partis, petits compris. Les deux arguments ont le
+  même poids : même nombre de phrases, même niveau de détail. Se baser sur le **texte de
+  la proposition**, jamais sur la réputation du parti.
+- Distinguer **fait contestable** (le dire dans la phrase : « selon les études, les avis
+  divergent ») et **choix de valeurs** (« tout dépend de ce qui compte le plus pour
+  chacun »), sans trancher.
+- Si une proposition est trop vague pour être expliquée honnêtement, laisser le champ
+  concerné vide (`''`) et le signaler dans le tableau, plutôt que d'inventer.
+- Ne jamais tronquer en silence : trop long → simplifier, et signaler la ligne.
+- Un exemple complet : `exemple-explication-proposition.md`.
+
+### Lire ce qui reste à expliquer (lecture seule)
+
+Résoudre d'abord le programme (section 4, étape a, ou le plus récent du parti, section 6).
+Compter, par thème, les propositions sans aucune explication :
+
+```sql
+select p.theme, count(*) as nb_sans_explication
+from opinions_propositions p
+where p.programme_id = '<programme_id>'
+  and p.explication_concret = '' and p.explication_pour = '' and p.explication_contre = ''
+group by p.theme
+order by p.theme;
+```
+
+Puis lister les propositions d'**un thème** à la fois :
+
+```sql
+select p.id, p."position", p.termes
+from opinions_propositions p
+where p.programme_id = '<programme_id>'
+  and p.theme = '<theme>'
+  and p.explication_concret = '' and p.explication_pour = '' and p.explication_contre = ''
+order by p.created_at;
+```
+
+Une explication partielle (un ou deux champs remplis) n'apparaît pas dans cette liste :
+elle compte comme déjà écrite. Pour la compléter, la traiter comme une régénération
+(ci-dessous).
+
+### Relecture : un thème à la fois, publication par lot
+
+1. Écrire les explications du thème, **compter les caractères avant de présenter** :
+
+   ```sql
+   select v.n, length(v.concret) as nb_concret, length(v.pour) as nb_pour,
+          length(v.contre) as nb_contre
+   from (values
+     (1, '<concret 1>', '<pour 1>', '<contre 1>'),
+     (2, '<concret 2>', '<pour 2>', '<contre 2>')
+   ) as v(n, concret, pour, contre)
+   where length(v.concret) > 600 or length(v.pour) > 600 or length(v.contre) > 600;
+   ```
+
+   Doit renvoyer **0 ligne**. Sinon, simplifier le texte de la ligne signalée et refaire
+   le contrôle.
+2. Présenter un tableau (n°, proposition, concret, pour, contre) pour **ce thème
+   seulement**, avec la source officielle lue.
+3. L'utilisateur valide ou corrige. **Rien n'est écrit avant l'accord explicite.**
+4. Écrire le lot du thème, puis passer au thème suivant.
+
+### Écrire un lot (un seul statement par thème)
+
+Les apostrophes sont doublées (`l''État`). Une chaîne vide `''` laisse le champ vide.
+La condition « les trois champs vides » protège une explication déjà écrite : si elle a
+été remplie entre-temps, la ligne est ignorée et le compte est plus petit.
+
+```sql
+with maj as (
+  update opinions_propositions p set
+    explication_concret = v.concret,
+    explication_pour = v.pour,
+    explication_contre = v.contre,
+    updated_at = now()
+  from (values
+    ('<proposition_id 1>'::uuid, '<concret 1>', '<pour 1>', '<contre 1>'),
+    ('<proposition_id 2>'::uuid, '<concret 2>', '<pour 2>', '<contre 2>')
+  ) as v(id, concret, pour, contre)
+  where p.id = v.id
+    and p.explication_concret = '' and p.explication_pour = ''
+    and p.explication_contre = ''
+  returning p.id
+)
+select count(*) as nb_modifiees from maj;
+```
+
+Le compte doit égaler le nombre de lignes validées du thème. Sinon, dire lesquelles n'ont
+pas été écrites (déjà expliquées entre-temps ?) et ne rien forcer.
+
+### Régénérer une explication existante
+
+Ne **jamais** écraser une explication déjà écrite sans l'annoncer.
+
+1. Lire l'existante :
+
+   ```sql
+   select p.id, p."position", p.explication_concret, p.explication_pour, p.explication_contre
+   from opinions_propositions p
+   where p.programme_id = '<programme_id>' and p.theme = '<theme>'
+     and (p.explication_concret <> '' or p.explication_pour <> '' or p.explication_contre <> '')
+   order by p.created_at;
+   ```
+2. Afficher l'**ancienne** et la **nouvelle** côte à côte, et demander l'accord.
+3. Après accord, utiliser le même `update … from (values …)` que ci-dessus **sans** les
+   trois lignes `and p.explication_… = ''` (sinon rien n'est modifié), puis le même
+   contrôle `count(*)`.
+
+Après chaque écriture : confirmer en une phrase (parti, thème, nombre de propositions
+expliquées) et rappeler de **tirer pour rafraîchir sur l'onglet Partis**.

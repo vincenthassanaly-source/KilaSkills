@@ -1,6 +1,6 @@
 ---
 name: kilio-opinions
-description: "Aider l'utilisateur à se forger des opinions politiques avec le module « Opinions » de Kilio (Supabase : tables opinions_*, idées et partis). Idées : classer une idée (thème, conviction, scores par axe), avocat du diable, contradictions, sujets sans avis, quiz guidé, profil politique. Partis : importer le programme officiel d'un parti, noter ses propositions sur les mêmes axes, comparer les partis, dire qui lui ressemble, priorités par thème. Utiliser pour « classe cette idée », « challenge mes idées », « avocat du diable », « mes contradictions », « sur quoi je n'ai pas d'avis », « fais-moi un quiz politique », « mon profil politique », « range mes brouillons d'opinions », « importe le programme de… », « propositions du parti… », « compare les partis », « qui me ressemble », « mes priorités par thème », ou ses idées, partis et programmes politiques dans Kilio. Aide à penser, jamais à voter : neutre, mots simples, validation explicite avant toute écriture."
+description: "Aider à se forger des opinions politiques avec le module « Opinions » de Kilio (Supabase, idées et partis). Idées : classer une idée (thème, scores par axe), avocat du diable, contradictions, sujets sans avis, quiz guidé, profil politique. Partis : importer le programme officiel d'un parti, noter ses propositions, expliquer chaque proposition (ce que ça change, meilleur argument pour et contre), comparer les partis, dire qui ressemble à l'utilisateur, priorités par thème. Utiliser pour « classe cette idée », « avocat du diable », « mes contradictions », « sur quoi je n'ai pas d'avis », « quiz politique », « mon profil politique », « range mes brouillons », « importe le programme de… », « explique les propositions de… », « génère les explications du programme de… », « explique la santé chez… », « compare les partis », « qui me ressemble », « mes priorités par thème », ou ses partis et programmes politiques. Aide à penser, jamais à voter : neutre, mots simples, validation explicite avant toute écriture."
 metadata:
   origin: kilaskills
 ---
@@ -29,7 +29,8 @@ les règles que l'app applique dans ses Server Actions (le skill ne passe pas pa
   `references/partis.md`, recherche des sources dans
   `references/recherche-programmes.md`, mots simples dans
   `references/lexique-simple.md`, exemple d'import dans
-  `references/exemple-import-parti.md`. Les règles « Langage simple » et « Règle
+  `references/exemple-import-parti.md`, exemple d'explications dans
+  `references/exemple-explication-proposition.md`. Les règles « Langage simple » et « Règle
   d'équité » plus bas valent pour tout ce qui touche aux partis.
 
 ## Le schéma
@@ -72,7 +73,9 @@ Tables de l'onglet « Partis » (détail, contraintes et ce que la base ne véri
   `date_programme` (date facultative, sert à trouver le programme le plus récent) ;
 - `opinions_propositions` : `programme_id` (cascade), `"position"` (280 caractères max),
   `theme` (obligatoire), `termes` (mots-clés à surligner et leurs définitions, jsonb),
-  les 5 mêmes scores, `updated_at` ;
+  les 5 mêmes scores, `explication_concret`, `explication_pour`, `explication_contre`
+  (text, `''` = pas encore expliquée, jamais `null`, **600 caractères max** chacun,
+  vérifié par la base), `updated_at` ;
 - `opinions_priorites` : `theme` (clé), `niveau` (`secondaire | normal | prioritaire`,
   absent = `normal`) ;
 - `opinions_idees.proposition_id` : rempli **par l'app** quand l'utilisateur « reprend »
@@ -394,7 +397,7 @@ le résultat en mots simples. Aucun lien ni citation n'est stocké en base ; en 
 toujours dire quelle source officielle a été lue.
 
 1. **Importer un programme** (« importe le programme de X », « ajoute les propositions
-   de X ») : cinq étapes, rien n'est écrit avant l'accord explicite.
+   de X ») : six étapes, rien n'est écrit avant l'accord explicite.
    a. Chercher en base le parti et l'échéance ; si le même programme existe, demander
    s'il faut l'enrichir ou le remplacer (jamais de doublon silencieux).
    b. Rechercher et lire le **programme officiel** : `references/recherche-programmes.md`
@@ -406,6 +409,9 @@ toujours dire quelle source officielle a été lue.
    expliqués ; l'utilisateur retire ou corrige des lignes.
    e. Après accord : écriture **en un seul lot**, contrôle `count(*)`, bilan en mots
    simples, rappel de tirer pour rafraîchir l'onglet Partis.
+   f. Proposer ensuite de lancer les **explications** du programme qui vient d'être
+   importé (point 7 ci-dessous, « Expliquer les propositions »). Sans réponse claire, ne
+   rien lancer.
 2. **Corriger / compléter** un programme : lire, proposer, appliquer après accord
    (`update … updated_at = now()`, `insert`, `delete`). Mêmes règles de langage et de
    notation.
@@ -420,6 +426,31 @@ toujours dire quelle source officielle a été lue.
 6. **Proposition qui inspire** : proposer à l'utilisateur de la reprendre, mais le
    laisser le faire dans l'app (bouton « Reprendre dans mes idées »), qui renseigne
    `proposition_id`.
+7. **Expliquer les propositions** (« explique les propositions de X », « génère les
+   explications du programme de X », « explique la santé chez X », ou étape f d'un
+   import) : pour chaque proposition, trois textes de 600 caractères au plus.
+   `explication_concret` = ce que la mesure change concrètement (un exemple de la vie
+   réelle, sans jugement) ; `explication_pour` = le meilleur argument pour, dans sa
+   version la plus solide ; `explication_contre` = le meilleur argument contre, avec la
+   même rigueur et le même niveau de détail. Procédure et requêtes :
+   `references/partis.md`, section 11 ; exemple : `references/exemple-explication-proposition.md`.
+   - **Volume** : on génère tout le programme d'un coup (après un import, ou à la
+     demande pour un programme déjà importé), pas au compte-gouttes. Pour « la santé
+     chez X », seul ce thème est traité.
+   - **Relecture par thème, publication par lot** : présenter **un thème à la fois** en
+     tableau (n°, proposition, concret, pour, contre), l'utilisateur valide ou corrige,
+     écrire le lot de ce thème (un seul `update … from (values …)`, contrôle
+     `count(*)`), puis passer au suivant. Rien n'est écrit avant l'accord explicite.
+   - **Pas de « ce que disent les autres partis »** dans le texte (périmé dès qu'un parti
+     change ; un comparateur par thème existera dans l'app). **Aucune source ni date
+     stockée** : l'explication aide à penser, le texte du programme officiel fait foi.
+     En session, dire toujours quelle source officielle a été lue.
+   - **600 caractères max par champ** : compter avant d'écrire ; si c'est trop long,
+     simplifier et signaler la ligne, ne jamais tronquer en silence.
+   - **Ne jamais écraser** une explication déjà écrite sans l'annoncer : pour une
+     régénération, afficher l'ancienne et la nouvelle, et demander l'accord.
+   - Après chaque écriture : confirmer en une phrase et rappeler de **tirer pour
+     rafraîchir sur l'onglet Partis**.
 
 ## Langage simple (tout ce qui touche aux partis)
 
@@ -453,8 +484,13 @@ de ton infantilisant.
 5. **En session** (tableaux de validation, comparaisons, bilan, explication de la
    proximité, résumé d'un parti) : mêmes règles. Les formules et détails techniques
    sont pour Claude, pas pour l'utilisateur.
-6. **Les termes de l'application aussi** : programme, proposition, échéance, thème,
-   axe, score, proximité, couverture, conviction, brouillon, validée… sont expliqués
+6. **Dans les explications** (`explication_*`, 600 caractères max par champ) : mêmes
+   mots simples ; les `termes` ne s'affichent pas dans ce bloc, donc **redéfinir
+   chaque mot technique dans le texte même**, une fois, en quelques mots. Neutre :
+   aucun adjectif valorisant ou dévalorisant, aucun ton moqueur ou admiratif.
+7. **Les termes de l'application aussi** : programme, proposition, échéance, thème,
+   axe, score, proximité, couverture, conviction, brouillon, validée, explication,
+   « ce que ça change », meilleur argument pour / contre… sont expliqués
    simplement. Le lexique est dans `references/lexique-simple.md` : le **relire à
    chaque import** pour rester cohérent d'un parti à l'autre. Un mot technique qui n'y
    figure pas se définit avec la même règle, et on propose à l'utilisateur de l'ajouter
@@ -484,6 +520,21 @@ chaque parti :
    d'un même thème pour tous les partis : deux mesures équivalentes = même score.
 8. La simplification des mots ne doit jamais faire pencher une proposition d'un côté.
 
+**Les explications suivent la même règle d'équité** :
+
+9. Même grille (concret, pour, contre), même longueur approximative et même rigueur pour
+   tous les partis, y compris les petits. Ne pas sauter un petit parti.
+10. Les deux arguments (pour / contre) ont le même poids : même niveau de détail, la même
+    force, jamais un argument solide face à un argument faible.
+11. Se baser **uniquement sur le texte de la proposition**, jamais sur la réputation du
+    parti, ses alliances ou son historique.
+12. Aucune recommandation de vote, aucune conclusion sur qui a raison. Distinguer ce qui
+    relève d'un **fait contestable** (le dire dans la phrase : « selon les études, les
+    avis divergent ») de ce qui relève d'un **choix de valeurs**.
+13. Avec des sous-agents, mêmes consignes et même grille pour tous ; relire soi-même d'une
+    seule traite les explications d'un même thème pour tous les partis (longueur,
+    force des arguments, neutralité).
+
 ## Garde-fous
 
 - Si une information manque (thème, conviction, idée visée ambiguë), poser la question
@@ -503,6 +554,11 @@ chaque parti :
   pour qui voter, ne pas qualifier les partis. Signaler les affirmations factuelles
   contestées ou à vérifier. Les explications simples ne donnent jamais d'avis ni de ton
   moqueur ou admiratif.
+- **Partis, explications** : ne jamais écraser une explication déjà écrite sans
+  l'annoncer (pour une régénération : ancienne + nouvelle, et accord explicite) ; ne
+  jamais dépasser 600 caractères par champ ni tronquer en silence ; ne jamais écrire
+  `null` (chaîne vide = pas encore expliquée) ; rien n'est écrit avant l'accord sur le
+  thème ; aucune source ni date stockée, mais toujours dire la source officielle lue.
 - **Partis, pas de données de test** : pour vérifier, travailler sur un vrai parti avec
   l'accord de l'utilisateur, ou lui rendre les requêtes sans les exécuter. Pour
   valider une écriture sans rien écrire, `EXPLAIN` (sans `ANALYZE`) suffit.
