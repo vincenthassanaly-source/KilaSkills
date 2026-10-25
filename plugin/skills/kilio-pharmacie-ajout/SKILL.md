@@ -21,6 +21,8 @@ les données.
 - Le skill gère deux domaines : le **cahier de cours** (sections ci-dessous) et le
   **référentiel** (section « Référentiel » en fin de document). « Ajoute <médicament> à la base
   de données » = référentiel, pas une notion du cahier.
+- **Huile essentielle** (« ajoute l'huile essentielle de… », huile dictée avec indications et
+  précautions) : ne pas traiter ici, utiliser le skill `kilio-huiles-essentielles`.
 
 ## Règles de fond
 
