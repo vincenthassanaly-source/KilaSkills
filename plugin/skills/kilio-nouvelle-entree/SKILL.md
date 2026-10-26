@@ -45,29 +45,10 @@ FK vers `listes_taches`). Toutes les autres ont un défaut ou acceptent `null`.
    - `toute_la_journee` : `false` par défaut.
    - `recurrence_frequence` : un des `quotidien | hebdomadaire | mensuel | annuel`
      ou `null`. `recurrence_fin` n'a de sens qu'accompagnée d'une fréquence.
-   - `rappel_minutes` : un des `5 | 15 | 30 | 60 | 1440`, uniquement si une heure est
-     définie (ou `1440` seul avec `toute_la_journee = true`, pour un rappel la veille).
-     Si la demande contient « rappel », « rappelle-moi » ou « mets-moi un rappel »,
-     il ne doit **jamais** rester à `null` (sinon le rappel n'est jamais déclenché) :
-     - Valeur par défaut : `5` (rappel 5 minutes avant). La valeur « à l'heure pile »
-       (`0`) n'est pas acceptée : la contrainte `taches_rappel_minutes_check` de la
-       base n'autorise que `5 | 15 | 30 | 60 | 1440`.
-     - Si l'utilisateur précise un délai (« 1 h avant », « la veille »), l'utiliser :
-       `5`, `15`, `30`, `60` ou `1440`.
-     - Rappel sans heure (« rappelle-moi », « mets un rappel »… sans heure précisée) :
-       ne pas poser de question et ne pas utiliser `toute_la_journee = true` /
-       `rappel_minutes = 1440`. Par défaut, le rappel a lieu le jour même de l'échéance
-       à 10 h : `heure` = `10:00`, `toute_la_journee = false`, `rappel_minutes` = `5`
-       (valeur par défaut ci-dessus ; `0` refusé par `taches_rappel_minutes_check`).
-       - Si l'utilisateur donne une date (« dans une semaine », « lundi »…) :
-         `echeance` = cette date et `heure` = `10:00`.
-       - S'il ne donne aucune date : `echeance` = date du jour et `heure` = `10:00`.
-       - Une heure ou un délai précisé par l'utilisateur (« la veille », « 1 h avant »)
-         prime toujours sur ce défaut.
-     - Exemple : « Rappelle-moi lundi à 10 h de faire une commande » → `echeance` = date
-       du lundi, `heure` = `10:00`, `rappel_minutes` = `5` (valeur par défaut ci-dessus).
-     - Exemple : « Rappelle-moi dans une semaine d'annuler X » → `echeance` = date du
-       jour + 7 jours, `heure` = `10:00`, `rappel_minutes` = `5`.
+   - `rappel_minutes` : un des `5 | 15 | 30 | 60 | 1440` (contrainte
+     `taches_rappel_minutes_check`, `0` refusé). Règles détaillées dans « Rappels »
+     ci-dessous ; si la demande contient « rappel », « rappelle-moi » ou « mets-moi un
+     rappel », il ne doit jamais rester à `null`.
    - `notes` : texte libre optionnel (`null` si absent), distinct du contenu d'une
      "note" Kilio — c'est juste un champ de description sur la tâche.
 4. Insérer :
@@ -84,6 +65,35 @@ FK vers `listes_taches`). Toutes les autres ont un défaut ou acceptent `null`.
 5. Ne jamais deviner un tag : si l'utilisateur en mentionne un, résoudre son id dans
    `tags` (créer la ligne si absente) puis insérer dans `taches_tags (tache_id, tag_id)`.
    Sinon, ignorer les tags.
+
+### Rappels (règles impératives)
+
+1. **Une demande de rappel = UNE seule ligne dans `taches`** (liste `Général` par
+   défaut). Ne jamais créer deux tâches (ex. une pour le jour J et une « rappel »
+   pour la veille).
+2. **« Rappel la veille » / « avec un rappel avant »** se règle dans la colonne
+   `rappel_minutes` de cette même tâche, jamais par une tâche supplémentaire.
+   - Valeurs autorisées : `5`, `15`, `30`, `60`, `1440`.
+   - `1440` = 1 jour avant, à la même heure que la tâche (tâche lundi 9 h →
+     notification dimanche 9 h).
+   - Une tâche n'a qu'un seul rappel : si une veille est demandée, elle **remplace**
+     le `5` par défaut.
+3. **Valeurs par défaut** :
+   - `rappel_minutes` non précisé : `5`.
+   - Heure non précisée : `10:00` le jour indiqué (ou le jour même, sans date).
+   - « Lundi prochain » dit un lundi : prendre le lundi de la **semaine suivante**
+     et vérifier la date avec l'outil de date (ne pas la deviner).
+4. **Valeur non autorisée** (ex. « rappel 2 jours avant ») : le dire en une phrase,
+   proposer la valeur autorisée la plus proche (ici `1440`), sans créer de tâche en
+   plus.
+5. **Après insertion, relire la ligne** (`select titre, echeance, heure,
+   rappel_minutes from taches where id = '<id>'`) et la confirmer en une phrase.
+
+Exemple de référence : « Rappel lundi à 9h AG copro avec un rappel la veille » →
+```sql
+insert into taches (titre, echeance, heure, rappel_minutes, liste_id, ordre)
+values ('AG copro', '<date du lundi>', '09:00', 1440, '<id Général>', <ordre>);
+```
 
 ## 2. Créer une note
 
