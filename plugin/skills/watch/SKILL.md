@@ -52,6 +52,14 @@ python3 "${CLAUDE_SKILL_DIR}/watch.py" "<url>" --with-frames
 
 Returns frame paths + transcript. **Read each frame path in parallel** with the Read tool so you see the full chronological visual flow alongside the transcript.
 
+### Gemini (Gemini regarde la vidéo : audio + visuel)
+
+```bash
+python3 "${CLAUDE_SKILL_DIR}/watch.py" "<url>" --gemini [--prompt "ta question"] [--gemini-model gemini-3.5-flash]
+```
+
+Envoie la vidéo à Gemini, qui la comprend nativement (parole + images + texte à l'écran) et renvoie une analyse. Les URL YouTube sont passées directement (aucun téléchargement) ; les autres sources (TikTok, fichier local…) sont téléchargées puis envoyées en inline (limite ~18 Mo). Idéal pour extraire une méthode d'un tuto avant de créer un skill. Nécessite `GEMINI_API_KEY` (env ou `~/.config/watch/.env`) ; dans un environnement cloud où le proxy injecte la clé pour `generativelanguage.googleapis.com`, rien à configurer. Réessaie automatiquement en cas de 429/5xx.
+
 ### Focus on a section
 
 ```bash
@@ -70,6 +78,7 @@ Works in both modes. Times accept `SS`, `MM:SS`, or `HH:MM:SS`. In transcript-on
 | `--resolution W` | (frames mode) Frame width in px. Default 512. Bump to 1024 only if reading on-screen text matters. |
 | `--fps F` | (frames mode) Override auto-fps (clamped to 2 fps). |
 | `--out-dir DIR` | Keep working files somewhere specific (default: tmp). |
+| `--gemini` | Let Gemini analyze the video (audio + visuals). See section above. |
 | `--json` | (transcript mode) Emit machine-readable JSON instead of markdown. |
 
 ## When the script needs Whisper

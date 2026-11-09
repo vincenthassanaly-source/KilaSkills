@@ -54,6 +54,15 @@ GROQ_ENDPOINT = "https://api.groq.com/openai/v1/audio/transcriptions"
 GROQ_MODEL = "whisper-large-v3"
 OPENAI_ENDPOINT = "https://api.openai.com/v1/audio/transcriptions"
 OPENAI_MODEL = "whisper-1"
+GEMINI_ENDPOINT = "https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent"
+GEMINI_MODEL = "gemini-3.5-flash"
+GEMINI_INLINE_MAX = 18 * 1024 * 1024  # inline request limit is ~20 MB
+GEMINI_DEFAULT_PROMPT = (
+    "Regarde cette vidéo et décris-la précisément : sujet, déroulé chronologique "
+    "avec timestamps [MM:SS], ce qui est dit (transcription fidèle des passages "
+    "importants), texte et éléments visibles à l'écran, outils ou méthodes "
+    "montrés étape par étape. Réponds dans la langue de la vidéo."
+)
 
 
 # ---------- time helpers ----------
@@ -733,6 +742,78 @@ def run_with_frames(args, work):
     return 0
 
 
+# ---------- Gemini (native video understanding) ----------
+
+def is_youtube(url):
+    host = (urlparse(url).netloc or "").lower()
+    return host.endswith("youtube.com") or host.endswith("youtu.be")
+
+
+def run_gemini(args, work):
+    """Ask Gemini to watch the video (audio + visuals) and answer a prompt."""
+    import base64
+
+    key = _read_env_key("GEMINI_API_KEY") or "proxy-injected"
+    prompt = args.prompt or GEMINI_DEFAULT_PROMPT
+    if args.start or args.end:
+        prompt += f" Concentre-toi sur la portion de {args.start or '0:00'} à {args.end or 'la fin'}."
+
+    source = args.source
+    info = {}
+    if is_url(source) and is_youtube(source):
+        print("[watch] gemini: YouTube URL passed directly (no download)…", file=sys.stderr)
+        video_part = {"file_data": {"file_uri": source}}
+        info = {"url": source}
+    else:
+        print("[watch] gemini: downloading video to send inline…", file=sys.stderr)
+        dl = download_video(source, work / "download")
+        info = dl["info"]
+        data = Path(dl["video_path"]).read_bytes()
+        if len(data) > GEMINI_INLINE_MAX:
+            raise SystemExit(
+                f"Video is {len(data) // (1024 * 1024)} MB; inline Gemini limit is "
+                f"{GEMINI_INLINE_MAX // (1024 * 1024)} MB. Use a YouTube URL or a shorter clip.")
+        mime = mimetypes.guess_type(dl["video_path"])[0] or "video/mp4"
+        video_part = {"inline_data": {"mime_type": mime,
+                                      "data": base64.b64encode(data).decode()}}
+
+    body = json.dumps({"contents": [{"parts": [video_part, {"text": prompt}]}]}).encode()
+    req = Request(GEMINI_ENDPOINT.format(model=args.gemini_model), data=body, method="POST",
+                  headers={"Content-Type": "application/json", "x-goog-api-key": key})
+    out = None
+    for attempt in range(1, 4):
+        try:
+            with urlopen(req, timeout=300, context=ssl.create_default_context()) as r:
+                out = json.loads(r.read().decode("utf-8"))
+            break
+        except urllib.error.HTTPError as e:
+            if e.code in (429, 500, 502, 503) and attempt < 3:
+                print(f"[watch] gemini {e.code}, retry {attempt}/2…", file=sys.stderr)
+                time.sleep(4 * attempt)
+                continue
+            raise SystemExit(f"Gemini error {e.code}: {e.read().decode('utf-8', 'replace')[:500]}")
+
+    try:
+        text = "".join(p.get("text", "") for p in out["candidates"][0]["content"]["parts"])
+    except (KeyError, IndexError):
+        raise SystemExit(f"Unexpected Gemini response: {json.dumps(out)[:500]}")
+
+    print("# watch: gemini analysis")
+    print()
+    print(f"- **Source:** {info.get('url') or source}")
+    if info.get("title"):
+        print(f"- **Title:** {info['title']}")
+    if info.get("uploader"):
+        print(f"- **Uploader:** {info['uploader']}")
+    print(f"- **Model:** {args.gemini_model}")
+    print()
+    print(text.strip())
+    print()
+    print("---")
+    print(f"_Work dir: `{work}` — delete when done._")
+    return 0
+
+
 def main():
     ap = argparse.ArgumentParser(prog="watch")
     ap.add_argument("source", help="Video URL or local path")
@@ -748,6 +829,11 @@ def main():
     ap.add_argument("--whisper", choices=["groq", "openai"], default=None)
     ap.add_argument("--json", action="store_true",
                     help="Transcript-only: emit machine-readable JSON.")
+    ap.add_argument("--gemini", action="store_true",
+                    help="Let Gemini watch the video (audio + visuals); needs a Gemini API key.")
+    ap.add_argument("--prompt", type=str, default=None,
+                    help="With --gemini: custom question/instructions about the video.")
+    ap.add_argument("--gemini-model", type=str, default=GEMINI_MODEL)
     args = ap.parse_args()
 
     work = Path(args.out_dir).expanduser().resolve() if args.out_dir \
@@ -755,6 +841,8 @@ def main():
     work.mkdir(parents=True, exist_ok=True)
     print(f"[watch] work dir: {work}", file=sys.stderr)
 
+    if args.gemini:
+        return run_gemini(args, work)
     if args.with_frames:
         return run_with_frames(args, work)
     return run_transcript_only(args, work)
