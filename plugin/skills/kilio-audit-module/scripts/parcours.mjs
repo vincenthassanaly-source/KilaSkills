@@ -5,7 +5,7 @@
 // À lancer depuis la racine du dépôt Kilio.
 //
 // Format d'un parcours (JSON) :
-// { "nom": "creer-tache", "viewport": "mobile|desktop", "theme": "clair|sombre",
+// { "nom": "creer-tache", "theme": "clair|sombre",
 //   "etapes": [ { "action": "goto", "url": "/taches", "note": "ouvrir les tâches" },
 //               { "action": "click", "cible": "role=button[name=/ajouter/i]" },
 //               { "action": "fill", "cible": "role=textbox", "valeur": "Acheter du pain" },
@@ -24,8 +24,8 @@ if (!cible) { console.error("Usage : node parcours.mjs <parcours.json | dossier>
 
 const base = flag("base", "http://localhost:3100").replace(/\/$/, "");
 const mock = flag("mock", "");
-const out = path.resolve(flag("out", "reports/parcours"));
-const viewports = { mobile: { width: 390, height: 844, hasTouch: true }, desktop: { width: 1280, height: 800 } };
+const out = path.resolve(flag("out", "reports/audit/module/parcours"));
+const vp = { width: 390, height: 844 }; // mobile uniquement
 
 const fichiers = fs.statSync(cible).isDirectory()
   ? fs.readdirSync(cible).filter((f) => f.endsWith(".json")).map((f) => path.join(cible, f))
@@ -48,9 +48,8 @@ for (const f of fichiers) {
   fs.mkdirSync(dossier, { recursive: true });
   if (mock && args.includes("--reset")) await fetch(`${mock}/__reset`).catch(() => {});
 
-  const vp = viewports[p.viewport ?? "mobile"];
   const ctx = await browser.newContext({
-    viewport: { width: vp.width, height: vp.height }, hasTouch: !!vp.hasTouch,
+    viewport: vp, hasTouch: true,
     locale: "fr-FR", timezoneId: "Europe/Paris", colorScheme: p.theme === "sombre" ? "dark" : "light",
   });
   const page = await ctx.newPage();
@@ -117,7 +116,7 @@ for (const f of fichiers) {
 <span class="tag">${s.statut}</span> ${s.erreur ? `<br>${esc(s.erreur)}` : ""}
 ${s.anomalies.map((a) => `<br>⚠ ${esc(a)}`).join("")}
 ${s.ecritures.length ? `<br>✎ ${s.ecritures.length} écriture(s) base` : ""}</figcaption></figure>`).join("\n");
-  html.push(`<h2>${esc(nom)} <small>(${p.viewport ?? "mobile"}, ${p.theme ?? "clair"})</small></h2><div class="film">${cartes}</div>`);
+  html.push(`<h2>${esc(nom)} <small>(mobile, ${p.theme ?? "clair"})</small></h2><div class="film">${cartes}</div>`);
   console.log(`${nom} : ${etapes.length} étape(s), ${etapes.filter((s) => s.statut !== "ok").length} problème(s)`);
   for (const s of etapes.filter((s) => s.statut !== "ok")) console.log(`  ! étape ${s.n} (${s.action}) : ${s.erreur ?? s.anomalies.join(" ; ")}`);
 }
