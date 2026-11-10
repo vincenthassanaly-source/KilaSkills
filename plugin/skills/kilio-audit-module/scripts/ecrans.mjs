@@ -1,7 +1,6 @@
 #!/usr/bin/env node
-// Énumère les écrans d'un module Kilio et les capture (mobile/desktop × clair/sombre).
-// Usage : node capturer-ecrans.mjs <module> [--liste] [--base URL] [--out DIR]
-//         [--themes clair,sombre] [--viewports mobile,desktop]
+// Énumère les écrans d'un module Kilio et les capture (mobile, clair + sombre).
+// Usage : node ecrans.mjs <module> [--liste] [--base URL] [--out DIR] [--themes clair,sombre]
 // À lancer depuis la racine du dépôt Kilio.
 import fs from "node:fs";
 import path from "node:path";
@@ -50,10 +49,9 @@ if (args.includes("--liste")) {
 }
 
 const base = flag("base", "http://localhost:3100").replace(/\/$/, "");
-const out = path.resolve(flag("out", `reports/ecrans/${module_}`));
+const out = path.resolve(flag("out", `reports/audit/${module_}/ecrans`));
 const themes = flag("themes", "clair,sombre").split(",");
-const viewports = { mobile: { width: 390, height: 844, hasTouch: true }, desktop: { width: 1280, height: 800 } };
-const vpNoms = flag("viewports", "mobile,desktop").split(",");
+const vp = { width: 390, height: 844 }; // mobile uniquement : app pensée pour téléphone
 fs.mkdirSync(out, { recursive: true });
 
 const req = createRequire(path.join(process.cwd(), "package.json"));
@@ -81,11 +79,10 @@ async function resoudre(route, page) {
 }
 
 const resultats = [];
-for (const vp of vpNoms) {
+{
   for (const theme of themes) {
     const ctx = await browser.newContext({
-      viewport: { width: viewports[vp].width, height: viewports[vp].height },
-      hasTouch: !!viewports[vp].hasTouch,
+      viewport: vp, hasTouch: true,
       locale: "fr-FR", timezoneId: "Europe/Paris",
       colorScheme: theme === "sombre" ? "dark" : "light",
     });
@@ -93,12 +90,12 @@ for (const vp of vpNoms) {
     for (const e of ecrans) {
       let url = e.route;
       if (e.dynamique) url = await resoudre(e.route, page);
-      const fichier = `${e.route.slice(1).replace(/[\/\[\]]/g, "_")}.${vp}.${theme}.png`;
-      if (!url) { resultats.push({ ...e, vp, theme, statut: "non résolue" }); continue; }
+      const fichier = `${e.route.slice(1).replace(/[\/\[\]]/g, "_")}.${theme}.png`;
+      if (!url) { resultats.push({ ...e, theme, statut: "non résolue" }); continue; }
       const rep = await page.goto(base + url, { waitUntil: "networkidle" }).catch(() => null);
       await page.waitForTimeout(400);
       await page.screenshot({ path: path.join(out, fichier), fullPage: true });
-      resultats.push({ ...e, url, vp, theme, fichier, statut: rep ? rep.status() : "erreur", titre: await page.title() });
+      resultats.push({ ...e, url, theme, fichier, statut: rep ? rep.status() : "erreur", titre: await page.title() });
     }
     await ctx.close();
   }
@@ -107,12 +104,12 @@ await browser.close();
 
 fs.writeFileSync(path.join(out, "ecrans.json"), JSON.stringify(resultats, null, 2));
 const cartes = resultats.map((r) => r.fichier
-  ? `<figure><img loading="lazy" src="${r.fichier}"><figcaption>${r.route}<br>${r.vp} · ${r.theme} · HTTP ${r.statut}</figcaption></figure>`
-  : `<figure class="nr"><figcaption>${r.route}<br>${r.vp} · ${r.theme} · ${r.statut}</figcaption></figure>`).join("\n");
+  ? `<figure><img loading="lazy" src="${r.fichier}"><figcaption>${r.route}<br>${r.theme} · HTTP ${r.statut}</figcaption></figure>`
+  : `<figure class="nr"><figcaption>${r.route}<br>${r.theme} · ${r.statut}</figcaption></figure>`).join("\n");
 fs.writeFileSync(path.join(out, "index.html"), `<!doctype html><meta charset="utf-8"><title>Écrans ${module_}</title>
 <style>body{font:14px system-ui;margin:16px;background:#f4f4f4}main{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:16px}
 figure{margin:0;background:#fff;padding:8px;border-radius:8px}img{width:100%;border:1px solid #ddd}.nr{color:#a00}</style>
 <h1>Module « ${module_} » — ${ecrans.length} écran(s)</h1><main>${cartes}</main>`);
 const ko = resultats.filter((r) => !r.fichier || r.statut >= 400);
 console.log(`${resultats.length} capture(s) dans ${out} — ${ko.length} problème(s)`);
-for (const r of ko) console.log(`  ! ${r.route} (${r.vp}/${r.theme}) : ${r.statut}`);
+for (const r of ko) console.log(`  ! ${r.route} (${r.theme}) : ${r.statut}`);
