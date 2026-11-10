@@ -44,6 +44,11 @@ Lecture seule : ne modifie jamais le code ni les données de Kilio.
 4. **Présenter** : ouvrir/joindre `index.html` (ou les PNG clés), résumer en tableau
    les écrans, et signaler les écrans en erreur (statut ≥ 400, page vide, non résolue).
 
+## Aller plus loin
+
+Pour voir les écrans *pendant l'usage* (créer, éditer, archiver…) avec une capture par
+action, utiliser le skill `kilio-parcours-utilisateur`.
+
 ## Enchaîner avec la critique impeccable
 
 Quand l'utilisateur veut aussi la critique du module :
